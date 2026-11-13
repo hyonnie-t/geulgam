@@ -24,8 +24,7 @@ const view = { src: '전체', where: '전체', stage: '글감' };
 try { Object.assign(view, JSON.parse(localStorage.getItem('geulgam-view') || '{}')); } catch (e) {}
 const saveView = () => { try { localStorage.setItem('geulgam-view', JSON.stringify(view)); } catch (e) {} };
 
-// ---------- 시작 ----------
-start();
+// ---------- 시작 (호출은 파일 맨 끝: 캐시로 바로 그릴 때 아래 const들이 준비돼 있어야 한다) ----------
 async function start() {
   $('#refresh').addEventListener('click', hardRefresh);
   $('#signin').addEventListener('click', onSignIn);
@@ -303,3 +302,5 @@ async function hardRefresh() {
 function registerSW() {
   if ('serviceWorker' in navigator && !isLocal) navigator.serviceWorker.register('sw.js').catch(() => {});
 }
+
+start();
