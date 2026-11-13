@@ -14,7 +14,7 @@
 - `tools/build.js` 볼트·블로그·인스타를 읽어 `drawer.local.json`을 만든다(읽기만, 1~2초, 숫자만 출력). 서랍에 오르는 노트: 일지 «## 이번 주 글감»에 나온 것 / `글감:` 속성이 있는 것 / `type: 글감` / 쓰임에 블로그·서평·인스타 기록이 있는 것 / 최근 60일 글과 제목이 맞는 책 노트. «서랍 깊숙이»는 글감후보.js와 같은 기준(본문 200자 이상·쓰임 없음) 긴 순 40개.
   - 칸 정하기: 속성 > 뽑힌 날 이후 나간 글(발행) > 글쓰기 쓰임(초안) > 글감. 뽑히기 전 글(예: 2년 전 인스타)은 «쓴 적 있음»으로만 보인다.
   - 출처: 폴더(4-독서·문화=책, 2-수업, 3-대학원, 0-수신함…), `쓸곳:` 속성으로 블로그/인스타를 바꿀 수 있다. 묵은 글감: 21일·42일.
-- `tools/upload.js [--dry]` 자료를 Firebase에 올린다(firebase-tools CLI, 효니 계정 로그인 필요). **효니 확인 전에는 돌리지 않는다**(2026-11-14 기준 아직 한 번도 안 올림).
+- `tools/upload.js [--dry]` 자료를 Firebase에 올린다(firebase-tools CLI, 효니 계정 로그인 필요). 2026-11-14 첫 실행(효니 «배포해줘»), 다시 받아 개수 대조 일치, 로그인 없는 REST 읽기는 Permission denied. 배포 https://hyonnie-t.github.io/geulgam/ (공개 레포, 자료 파일은 404).
 - `tools/serve.js` 내 PC 확인용(127.0.0.1:8801, launch 이름 `geulgam`). localhost에서는 `drawer.local.json`을 바로 읽는다. `?demo=1`은 가짜 자료 `demo/drawer.json`, `?fb=1`은 localhost에서도 로그인 경로.
 - `index.html` / `css/app.css` / `js/app.js`(화면) / `js/fb.js`(로그인·읽기, 책장 fb.js 방식) / `sw.js`(앱 파일만 캐시, 자료는 캐시 안 함) / `js/vendor/lucian-icons`(refresh 61번·copy 9번, MIT).
 
