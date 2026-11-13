@@ -9,6 +9,8 @@ if (!fs.existsSync(FILE)) { console.error('drawer.local.json이 없습니다. �
 const d = JSON.parse(fs.readFileSync(FILE, 'utf8'));
 console.log(`올릴 자료: 서랍 ${d.items.length} · 깊숙이 ${d.deep.length} · ${(fs.statSync(FILE).size / 1024).toFixed(1)}KB · 기준일 ${d.today}`);
 if (process.argv.includes('--dry')) process.exit(0);
-const npx = process.platform === 'win32' ? 'npx.cmd' : 'npx';
-execFileSync(npx, ['-y', 'firebase-tools', 'database:set', `/users/${OWNER_UID}/geulgam`, FILE, '--project', 'timetable-af612', '-f'], { stdio: ['ignore', 'ignore', 'inherit'], shell: process.platform === 'win32' });
+// 윈도우의 npx.cmd는 셸로만 돌고, 셸은 인자를 따옴표 없이 이어 붙인다. 경로에 빈칸(OneDrive - 대영중학교)이 있으니 직접 감싼다
+const win = process.platform === 'win32';
+const q = (s) => (win ? `"${s}"` : s);
+execFileSync(win ? 'npx.cmd' : 'npx', ['-y', 'firebase-tools', 'database:set', `/users/${OWNER_UID}/geulgam`, q(FILE), '--project', 'timetable-af612', '-f'], { stdio: ['ignore', 'ignore', 'inherit'], shell: win });
 console.log('올렸습니다.');

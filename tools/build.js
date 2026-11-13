@@ -68,7 +68,7 @@ const isDate = (s) => /^\d{4}-\d{2}-\d{2}/.test(s || '');
 const notes = new Map(); // 노트 이름 → 정보
 for (const s of SOURCES) {
   for (const file of walk(path.join(VAULT, s.dir))) {
-    const text = fs.readFileSync(file, 'utf8');
+    const text = fs.readFileSync(file, 'utf8').replace(/^﻿/, '');
     const { fm, body } = split(text);
     const name = path.basename(file, '.md');
     const rel = path.relative(VAULT, file).replace(/\\/g, '/');
@@ -149,18 +149,27 @@ function instaPosts() {
 // 노트와 글 맞추기: 책 노트는 책 제목, 다른 노트는 노트 이름(4글자 이상)
 // 노트 이름의 «(출판사) », «서평 제출 - », 끝의 «(…)»를 떼고 맞춘다
 const bare = (s) => (s || '').replace(/^\([^)]*\)\s*/, '').replace(/^.*?\s-\s/, '').replace(/\s*\([^)]*\)\s*$/, '');
+// 쓰임 줄의 «글 제목»: "2026-11-10 블로그 «제목»"
+const usedTitles = (used) => used.map((u) => (u.match(/«([^»]+)»/) || [])[1]).filter(Boolean).map(norm).filter((t) => t.length >= 4);
 function matchPosts(n, posts) {
   const keys = [...new Set([norm(n.title), norm(n.name), norm(bare(n.name)), norm(bare(n.title))])].filter((k) => k.length >= 2);
-  if (!keys.length) return [];
+  const byUsed = usedTitles(n.used);
   const nameKey = norm(n.name);
   return posts.filter((p) => {
+    const pt = norm(p.t);
+    // 쓰임에 적어 둔 글 제목과 같으면 어떤 노트든 그 글
+    if (byUsed.some((u) => pt === u || (u.length >= 6 && pt.includes(u)))) return true;
+    if (!keys.length) return false;
+    // 책 제목으로 맞추기는 책 노트만(수업 노트 «인생»이 책 «인생» 인스타에 붙지 않게)
+    if (n.src !== '책') return p.k === '블로그' && keys.some((k) => k.length >= 6 && pt.includes(k));
     if (p.k === '인스타') {
-      if (p.t && keys.includes(norm(p.t))) return true;
+      if (p.t && keys.includes(pt)) return true;
       return (p.tags || []).some((t) => t.length >= 4 && keys.includes(t));
     }
-    const br = [...(p.t || '').matchAll(/[『「《〈<]([^』」》〉>]{1,40})[』」》〉>]/g)].map((m) => norm(m[1]));
+    // 책 제목 괄호는 『』《》만(강조에 쓰는 <>·「」는 빼고)
+    const br = [...(p.t || '').matchAll(/[『《]([^』》]{1,40})[』》]/g)].map((m) => norm(m[1]));
     if (br.some((b) => keys.includes(b) || (b.length >= 4 && nameKey.includes(b)))) return true;
-    return keys.some((k) => k.length >= 6 && norm(p.t).includes(k));
+    return keys.some((k) => k.length >= 6 && pt.includes(k));
   });
 }
 const usedKind = (u) => (u.match(/^\d{4}-\d{2}-\d{2}\s+(\S+)/) || [])[1] || '';
@@ -194,9 +203,10 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
     let stage = '글감', why = '';
     const sp = n.stageProp.replace(/\s/g, '');
     if (STAGES.includes(sp)) { stage = sp; why = '노트 속성 «글감: ' + sp + '»'; }
-    // 글감으로 뽑히기 전에 나간 글(예: 2년 전 인스타)은 «이미 쓴 적 있음»으로만 보이고 발행으로 치지 않는다
-    const firstPick = mine.length ? mine[0].date : '';
-    const fresh = pub.filter((p) => !firstPick || (p.d || '') >= firstPick);
+    // 글감이 된 날(뽑힌 날 > 글감날짜) 이전에 나간 글(예: 2년 전 인스타)은 «쓴 적 있음»으로만 보이고 발행으로 치지 않는다.
+    // 속성(글감·초안)을 적어 두고 기준 날짜가 없으면 속성이 이긴다. 속성도 날짜도 없으면 맞는 글이 곧 발행.
+    const anchor = mine.length ? mine[0].date : (n.stageProp ? n.date : '');
+    const fresh = pub.filter((p) => (anchor ? (p.d || '') >= anchor : !n.stageProp));
     if (fresh.length && stage !== '발행') { stage = '발행'; why = fresh[fresh.length - 1].k + ' 글과 제목이 같음'; }
     else if (stage === '글감' && writeUsed.length) { stage = '초안'; why = '쓰임에 글쓰기 기록이 있음'; }
     const since = mine.length ? mine[0].date : (n.date || '');
