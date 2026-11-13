@@ -1,0 +1,103 @@
+<!doctype html>
+<html lang="ko">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<meta name="color-scheme" content="light dark">
+<meta name="robots" content="noindex, nofollow">
+<meta name="theme-color" content="#f6f3fb" media="(prefers-color-scheme: light)">
+<meta name="theme-color" content="#1d1a26" media="(prefers-color-scheme: dark)">
+<title>글감 서랍</title>
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" href="icons/icon.svg" type="image/svg+xml">
+<link rel="apple-touch-icon" href="icons/icon-180.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="글감 서랍">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Gowun+Dodum&display=swap">
+<link rel="stylesheet" href="css/app.css">
+<script type="module" src="js/vendor/lucian-icons/refresh.js"></script>
+<script type="module" src="js/vendor/lucian-icons/copy.js"></script>
+<script type="module" src="js/app.js"></script>
+</head>
+<body>
+<header class="top">
+  <div class="brand">
+    <h1>글감 서랍</h1>
+    <p class="sub">블로그·책 인스타 글감이 어디쯤 있는지</p>
+  </div>
+  <div class="top-tools">
+    <button type="button" class="icon-btn" id="refresh" aria-label="새로고침">
+      <lucian-refresh state="idle" size="22"></lucian-refresh>
+    </button>
+    <button type="button" class="text-btn" id="signout" hidden>로그아웃</button>
+  </div>
+</header>
+
+<main id="main">
+  <p class="stamp" id="stamp" aria-live="polite">불러오는 중…</p>
+
+  <section class="gate" id="gate" hidden aria-labelledby="gate-title">
+    <h2 id="gate-title">효니만 볼 수 있는 서랍이에요</h2>
+    <p>볼트 노트 제목과 첫 줄이 들어 있어서, 로그인한 주인에게만 보여요.</p>
+    <button type="button" class="primary" id="signin">구글로 로그인</button>
+    <p class="gate-msg" id="gate-msg" role="status"></p>
+  </section>
+
+  <div id="content" hidden>
+    <section class="week" aria-labelledby="week-title">
+      <div class="sec-head">
+        <h2 id="week-title">이번 주 글감</h2>
+        <span class="sec-note" id="week-date"></span>
+      </div>
+      <ol class="week-list" id="week-list"></ol>
+    </section>
+
+    <div class="bar" id="bar">
+      <fieldset class="chips" id="f-src">
+        <legend class="vh">어디서 온 글감</legend>
+      </fieldset>
+      <fieldset class="chips" id="f-where">
+        <legend class="vh">어디에 쓸 글</legend>
+      </fieldset>
+    </div>
+
+    <section class="board-wrap" aria-labelledby="board-title">
+      <h2 id="board-title" class="vh">글감 → 초안 → 발행</h2>
+      <fieldset class="stage-tabs" id="stage-tabs">
+        <legend class="vh">보는 칸</legend>
+      </fieldset>
+      <div class="board" id="board"></div>
+    </section>
+
+    <details class="deep" id="deep">
+      <summary><span>서랍 깊숙이</span> <span class="sec-note" id="deep-note"></span></summary>
+      <p class="hint">본문이 200자 넘는데 아직 아무 데도 쓰이지 않은 노트예요(긴 순서). 마음에 드는 게 있으면 옵시디언에서 그 노트에 <code>글감: 글감</code>을 적어 두면 위 칸으로 올라와요.</p>
+      <ul class="deep-list" id="deep-list"></ul>
+    </details>
+
+    <section class="recent" aria-labelledby="recent-title">
+      <div class="sec-head">
+        <h2 id="recent-title">최근 나간 글</h2>
+        <span class="sec-note">45일 안</span>
+      </div>
+      <ul class="recent-list" id="recent-list"></ul>
+    </section>
+  </div>
+</main>
+
+<dialog id="detail" closedby="any" aria-labelledby="d-title">
+  <div class="d-head">
+    <div>
+      <p class="d-tags" id="d-tags"></p>
+      <h2 id="d-title"></h2>
+    </div>
+    <form method="dialog"><button class="icon-btn close" value="" aria-label="닫기">✕</button></form>
+  </div>
+  <div class="d-body" id="d-body"></div>
+</dialog>
+
+<div class="toast" id="toast" role="status" aria-live="polite"></div>
+</body>
+</html>

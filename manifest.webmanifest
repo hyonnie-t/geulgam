@@ -1,0 +1,15 @@
+{
+  "name": "글감 서랍",
+  "short_name": "글감 서랍",
+  "description": "블로그·책 인스타 글감이 어디쯤 있는지 보는 효니의 서랍",
+  "start_url": "./",
+  "scope": "./",
+  "display": "standalone",
+  "background_color": "#f6f3fb",
+  "theme_color": "#f6f3fb",
+  "icons": [
+    { "src": "icons/icon.svg", "sizes": "any", "type": "image/svg+xml" },
+    { "src": "icons/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "icons/icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any maskable" }
+  ]
+}
