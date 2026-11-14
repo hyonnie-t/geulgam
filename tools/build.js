@@ -88,6 +88,8 @@ for (const s of SOURCES) {
     if (n.date) n.date = n.date.slice(0, 10);
     // 오데이 녹음에서 온 글감 노트(0-수신함, type: 글감, 출처: 오데이 …)
     if (type === '글감' && /오데이|auday/i.test(n.origin)) n.src = '오데이';
+    // 메일 소재(클라우드 루틴 «주간 블로그 소재 큐레이션» 보고서에서 옮긴 글감 노트, 출처: 메일 …)
+    if (type === '글감' && /메일|뉴스레터/.test(n.origin)) n.src = '메일';
     const w = prop(fm, '쓸곳');
     if (w) n.where = w.split(/[,\s·]+/).filter(Boolean);
     if (!notes.has(name)) notes.set(name, n);
@@ -172,6 +174,26 @@ function matchPosts(n, posts) {
     return keys.some((k) => k.length >= 6 && pt.includes(k));
   });
 }
+// ---------- 티스토리 임시저장 ----------
+// tools/drafts-snippet.js를 내장 브라우저에서 돌려 저장한 파일(비공개, gitignore). 없으면 건너뛴다.
+const DRAFTS = path.resolve(opt('--drafts', path.join(ROOT, 'tistory-drafts.local.json')));
+function tistoryDrafts() {
+  if (!fs.existsSync(DRAFTS)) return { at: '', drafts: [] };
+  try {
+    const j = JSON.parse(fs.readFileSync(DRAFTS, 'utf8').replace(/^﻿/, ''));
+    const list = Array.isArray(j.drafts) ? j.drafts : [];
+    // 제목 없이 저장한 글·번호 없는 항목도 카드가 겹치거나 빈칸이 되지 않게
+    return { at: j.at || '', drafts: list.map((d, i) => ({ ...d, seq: d.seq ?? 'n' + i, title: (d.title || '').trim(), untitled: !(d.title || '').trim() })) };
+  } catch (e) {
+    console.warn('임시저장 파일을 못 읽었습니다:', e.message);
+    return { at: '', drafts: [] };
+  }
+}
+const draftInfo = (d) => ({
+  seq: d.seq, updated: d.updated, created: d.created, minutes: d.minutes, chars: d.chars,
+  imgs: d.imgs, fill: d.fill, guess: d.guess, tags: d.tags, cat: d.cat,
+});
+
 const usedKind = (u) => (u.match(/^\d{4}-\d{2}-\d{2}\s+(\S+)/) || [])[1] || '';
 const WRITE_KIND = /블로그|서평|인스타|티스토리|글/;
 const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
@@ -195,6 +217,24 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
     if (n.src === '책' && matchPosts(n, recentPub).length) add(n);
   }
 
+  // 티스토리 임시저장: 제목이 맞는 노트가 있으면 그 노트 카드에 붙이고(초안 칸), 없으면 따로 카드를 만든다
+  const td = tistoryDrafts();
+  const draftByNote = new Map();
+  const loose = [];
+  for (const d of td.drafts) {
+    if (d.untitled) { loose.push(d); continue; }
+    const pseudo = [{ k: '블로그', t: d.title }];
+    // 임시저장 제목의 『책 제목』이 노트 이름(«블로그 초안 - 카스트»처럼 앞머리를 뗀 것)과 같아도 같은 글로 본다.
+    // 수업 노트 «인생»이 책 『인생』 글에 붙지 않게 책 노트·이름에 «초안»이 든 노트만.
+    const br = [...(d.title || '').matchAll(/[『《]([^』》]{1,40})[』》]/g)].map((m) => norm(m[1])).filter((b) => b.length >= 2);
+    const brMatch = (n) => br.length && (n.src === '책' || /초안/.test(n.name)) && [norm(bare(n.name)), norm(bare(n.title))].some((k) => br.includes(k));
+    const cands = [...notes.values()].filter((n) => brMatch(n) || matchPosts(n, pseudo).length);
+    // 이미 서랍에 있는 노트 > 책 노트 > 나머지
+    cands.sort((a, b) => (chosen.has(b.name) - chosen.has(a.name)) || ((b.src === '책') - (a.src === '책')));
+    const n = cands.find((c) => !draftByNote.has(c.name));
+    if (n) { draftByNote.set(n.name, d); add(n); } else loose.push(d);
+  }
+
   const items = [];
   for (const n of chosen.values()) {
     const mine = picks.filter((p) => p.name === n.name);
@@ -209,11 +249,16 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
     const fresh = pub.filter((p) => (anchor ? (p.d || '') >= anchor : !n.stageProp));
     if (fresh.length && stage !== '발행') { stage = '발행'; why = fresh[fresh.length - 1].k + ' 글과 제목이 같음'; }
     else if (stage === '글감' && writeUsed.length) { stage = '초안'; why = '쓰임에 글쓰기 기록이 있음'; }
+    const draft = draftByNote.get(n.name);
+    // 임시저장본이 있으면 아직 안 나간 글이다(발행되면 임시저장 목록에서 빠진다).
+    // 같은 노트로 앞편(예: «(1)»)이 나갔어도 이 임시저장본과 제목이 같은 글이 없으면 초안으로 둔다.
+    if (draft && !pub.some((p) => norm(p.t) === norm(draft.title))) { stage = '초안'; why = '티스토리 임시저장에 있음'; }
     const since = mine.length ? mine[0].date : (n.date || '');
     items.push({
       id: n.rel,
       name: n.name,
-      title: n.src === '책' && n.title !== n.name ? n.title : n.name,
+      // 임시저장본이 있으면 실제 글 제목을 보인다(노트 이름은 상세 창 «부탁할 말»에 남음)
+      title: draft ? draft.title : n.src === '책' && n.title !== n.name ? n.title : n.name,
       author: n.author || undefined,
       file: n.rel,
       src: n.src,
@@ -227,9 +272,37 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
       pub: pub.map((p) => ({ k: p.k, d: p.d, t: p.t || p.first, u: p.u })),
       len: n.len,
       head: n.head,
+      draft: draft ? { ...draftInfo(draft), title: draft.title } : undefined,
     });
   }
-  items.sort((a, b) => STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage) || (b.age ?? -1) - (a.age ?? -1));
+  // 노트와 이어지지 않은 임시저장본도 초안 칸에
+  for (const d of loose) {
+    // 임시저장 파일이 묵어서 이미 발행된 글이 남아 있으면 뺀다(제목이 같은 공개 글이 있음)
+    if (!d.untitled && blog.some((p) => norm(p.t) === norm(d.title))) continue;
+    const since = d.created || '';
+    const t = d.untitled ? '(제목 없음)' : d.title;
+    items.push({
+      id: 'tistory-draft-' + d.seq,
+      name: t,
+      title: t,
+      file: '',
+      src: '임시저장',
+      where: ['블로그'],
+      stage: '초안',
+      stageWhy: '티스토리 임시저장에 있음(이어진 노트 없음)',
+      since: since || undefined,
+      age: since ? daysBetween(since, TODAY) : undefined,
+      picks: [], used: [], pub: [],
+      len: d.chars,
+      head: d.head || '',
+      draft: { ...draftInfo(d), title: t },
+    });
+  }
+  // 초안 칸은 임시저장본 먼저, 그 안에서는 많이 쓴 글 먼저
+  const draftRank = (i) => (i.draft ? 1 : 0);
+  items.sort((a, b) => STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage)
+    || (a.stage === '초안' && (draftRank(b) - draftRank(a) || ((b.draft && b.draft.chars) || 0) - ((a.draft && a.draft.chars) || 0)))
+    || (b.age ?? -1) - (a.age ?? -1));
 
   // 가장 최근 «이번 주 글감»
   const lastDate = picks.length ? picks[picks.length - 1].date : '';
@@ -259,11 +332,13 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
       withBody: allNotes.filter((n) => n.len >= 200).length,
       usedNotes: allNotes.filter((n) => n.used.length).length,
       picks: picks.length,
+      drafts: td.drafts.length,
+      draftsAt: td.at || undefined,
     },
   };
   fs.writeFileSync(OUT, JSON.stringify(out));
   const cnt = STAGES.map((s) => s + ' ' + items.filter((i) => i.stage === s).length).join(' · ');
   // 내용은 출력하지 않고 숫자만
-  console.log(`기준일 ${TODAY} · 서랍 ${items.length}개(${cnt}) · 깊숙이 ${deep.length} · 최근 글 ${recentPosts.length} · 블로그 ${blog.length}/인스타 ${insta.length}`);
+  console.log(`기준일 ${TODAY} · 서랍 ${items.length}개(${cnt}) · 깊숙이 ${deep.length} · 최근 글 ${recentPosts.length} · 블로그 ${blog.length}/인스타 ${insta.length} · 임시저장 ${td.drafts.length}(노트와 이어짐 ${draftByNote.size}) · 메일 글감 ${items.filter((i) => i.src === '메일').length}`);
   console.log('→ ' + path.relative(process.cwd(), OUT));
 })().catch((e) => { console.error(e.message); process.exit(1); });

@@ -180,6 +180,11 @@ main { max-width: 1200px; margin: 0 auto; padding: 0 var(--space-3) var(--space-
 .tag { display: inline-flex; align-items: center; min-height: 24px; padding: 0 var(--space-2); border-radius: 999px; font-size: 12px;
   background: color-mix(in srgb, var(--accent) 12%, var(--paper)); color: var(--ink); }
 .tag.where { background: transparent; border: 1px solid var(--line); }
+.tag.tdraft { background: color-mix(in srgb, var(--draft) 55%, var(--paper)); font-weight: 600; }
+.d-facts { display: grid; grid-template-columns: repeat(auto-fill, minmax(120px, 1fr)); gap: var(--space-2); margin: 0; }
+.d-facts div { background: color-mix(in srgb, var(--draft) 16%, var(--paper)); border-radius: 12px; padding: var(--space-2) var(--space-3); }
+.d-facts dt { font-size: 12px; color: var(--soft); }
+.d-facts dd { margin: 0; font-weight: 600; }
 .tag.old { background: color-mix(in srgb, var(--old) 16%, var(--paper)); color: var(--old); }
 .tag.old.very { background: var(--old); color: var(--paper); }
 

@@ -7,7 +7,10 @@ const STAGES = [
   { key: '초안', label: '초안', emoji: '✏️', empty: '쓰는 중인 글이 없어요. 옵시디언에서 그 노트에 «글감: 초안»을 적으면 여기로 와요.' },
   { key: '발행', label: '발행', emoji: '📮', empty: '최근 60일에 나간 글과 이어진 노트가 없어요.' },
 ];
-const SRC_EMOJI = { 책: '📚', 수업: '🏫', 대학원: '🎓', 오데이: '🎙️', 수신함: '📥', 개인: '🌿', 업무: '🗂️' };
+const SRC_EMOJI = { 책: '📚', 수업: '🏫', 대학원: '🎓', 오데이: '🎙️', 메일: '📮', 임시저장: '✍️', 수신함: '📥', 개인: '🌿', 업무: '🗂️' };
+const TISTORY_WRITE = 'https://0hyonnie.tistory.com/manage/newpost';
+// 임시저장본 한 줄 요약: «3,467자 · ★ 채울 곳 3 · ☆ 확인 5»
+const draftLine = (d) => [`${Number(d.chars || 0).toLocaleString('ko-KR')}자`, d.fill ? `★ 채울 곳 ${d.fill}` : '', d.guess ? `☆ 확인 ${d.guess}` : '', d.updated ? `${fmtDay(d.updated)} 고침` : ''].filter(Boolean).join(' · ');
 const OLD = 21, VERY_OLD = 42; // 묵은 글감 기준(일)
 const VAULT = '효니노트';
 const CACHE = 'geulgam-cache';
@@ -135,11 +138,14 @@ function renderFilters() {
 function card(it, n) {
   const tags = [`<span class="tag">${SRC_EMOJI[it.src] || ''} ${esc(it.src)}</span>`, ...it.where.map((w) => `<span class="tag where">${esc(w)}</span>`)];
   if (data.week.ids.includes(it.id)) tags.unshift('<span class="tag thisweek">⭐ 이번 주</span>');
+  if (it.draft && it.src !== '임시저장') tags.unshift('<span class="tag tdraft">✍️ 임시저장</span>');
   if (it.stage === '글감' && it.age >= OLD) tags.push(`<span class="tag old${it.age >= VERY_OLD ? ' very' : ''}">묵은 지 ${it.age}일</span>`);
   let line = '';
   if (it.stage === '발행') {
     const last = it.pub[it.pub.length - 1];
     line = last ? `${fmtDay(last.d)} ${last.k}에 나감` : esc(it.stageWhy);
+  } else if (it.draft) {
+    line = esc(draftLine(it.draft));
   } else {
     const p = it.picks[it.picks.length - 1];
     line = p && p.why ? esc(p.why) : esc(it.head || it.stageWhy);
@@ -191,6 +197,7 @@ const obsidianUrl = (file) => `obsidian://open?vault=${encodeURIComponent(VAULT)
 function askFor(it) {
   const p = it.picks.find((x) => x.ask);
   if (p) return p.ask;
+  if (it.draft) return `티스토리 임시저장 «${it.draft.title}» 발행 전 점검하자${it.file ? ` (노트 [[${it.name}]])` : ''}`;
   if (it.stage === '초안') return `[[${it.name}]] 초안 이어서 다듬자`;
   if (it.src === '책') return `[[${it.name}]]로 ${it.where.includes('인스타') ? '책 인스타 글' : '티스토리 서평'} 초안 같이 쓰자`;
   return `[[${it.name}]]로 티스토리 글 초안 같이 쓰자`;
@@ -207,17 +214,30 @@ function openItem(id) {
   $('#d-title').textContent = it.title + (it.author ? ` · ${it.author}` : '');
   const sec = (h, body) => body ? `<section class="d-sec"><h3>${h}</h3>${body}</section>` : '';
   const next = it.stage === '글감' ? '쓰기 시작하면 노트에 <code>글감: 초안</code>' : it.stage === '초안' ? '글이 나가면 블로그·인스타 제목으로 저절로 «발행»에 와요' : '';
+  const d = it.draft;
+  const fact = (k, v) => `<div><dt>${k}</dt><dd>${esc(v)}</dd></div>`;
+  const draftSec = d ? `${d.title !== it.title ? `<p class="hint">«${esc(d.title)}»</p>` : ''}<dl class="d-facts">${[
+    fact('분량', `${Number(d.chars || 0).toLocaleString('ko-KR')}자`),
+    fact('마지막 고침', d.updated ? fmtDay(d.updated) : '모름'),
+    fact('쓴 시간', `${d.minutes || 0}분`),
+    d.fill ? fact('★ 직접 채울 곳', `${d.fill}곳`) : '',
+    d.guess ? fact('☆ 확인할 문장', `${d.guess}곳`) : '',
+    fact('사진', `${d.imgs || 0}장`),
+    fact('태그·카테고리', `${d.tags ? `태그 ${d.tags}개` : '태그 없음'} · ${d.cat ? '카테고리 있음' : '카테고리 없음'}`),
+  ].join('')}</dl>` : '';
   const before = it.stage !== '발행' && it.pub.length ? `<ul>${it.pub.map((p) => `<li>${fmtDay(p.d)} ${esc(p.k)}에 쓴 적 있음 — <a href="${esc(p.u)}" target="_blank" rel="noopener">${esc(p.t || '열기')}</a></li>`).join('')}</ul>` : '';
   $('#d-body').innerHTML = [
     sec('왜 여기 있나', `<p>${esc(it.stageWhy || '')}${it.since ? ` · ${fmtDay(it.since)}부터` : ''}${next ? `<br><span class="hint">다음: ${next}</span>` : ''}</p>`),
+    sec('티스토리 임시저장', draftSec),
     sec('뽑힌 이유', it.picks.filter((p) => p.why).map((p) => `<p class="d-quote">${esc(p.why)}<br><span class="hint">${fmtDay(p.d)} 이번 주 글감</span></p>`).join('')),
-    sec('노트 첫 줄', it.head ? `<p class="hint">${esc(it.head)}${it.len ? ` (본문 ${it.len}자)` : ''}</p>` : ''),
+    sec(it.file ? '노트 첫 줄' : '글 첫 줄', it.head ? `<p class="hint">${esc(it.head)}${it.len && it.file ? ` (본문 ${it.len}자)` : ''}</p>` : ''),
     sec('나간 글', it.stage === '발행' ? `<ul>${it.pub.map((p) => `<li>${fmtDay(p.d)} ${esc(p.k)} — <a href="${esc(p.u)}" target="_blank" rel="noopener">${esc(p.t || '열기')}</a></li>`).join('')}</ul>` : before),
     sec('쓰임', it.used.length ? `<ul>${it.used.map((u) => `<li>${esc(u)}</li>`).join('')}</ul>` : (it.stage === '발행' ? '<p class="hint">노트의 «쓰임»이 비어 있어요. 이 글을 쓰임에 적어 두면 «쓰인 노트»로 세요.</p>' : '')),
     sec('Claude에게 부탁할 말', `<p class="d-quote">${esc(askFor(it))}</p>`),
     `<div class="d-actions">
       <button type="button" class="primary" data-copy="${esc(askFor(it))}"><lucian-copy state="idle" size="20" tone="line"></lucian-copy> 부탁할 말 복사</button>
-      <a class="ghost" href="${esc(obsidianUrl(it.file))}">🪨 옵시디언에서 노트 열기</a>
+      ${d ? `<a class="ghost" href="${TISTORY_WRITE}" target="_blank" rel="noopener">✍️ 티스토리 글쓰기 열기 <small>임시저장 목록에서 고르기</small></a>` : ''}
+      ${it.file ? `<a class="ghost" href="${esc(obsidianUrl(it.file))}">🪨 옵시디언에서 노트 열기</a>` : ''}
       ${it.stage === '글감' ? `<button type="button" class="ghost" data-copy="글감: 초안"><lucian-copy state="idle" size="20" tone="line"></lucian-copy> «글감: 초안» 줄 복사 <small>노트 맨 위 속성에 붙이기</small></button>` : ''}
     </div>`,
   ].join('');
