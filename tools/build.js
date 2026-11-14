@@ -304,6 +304,23 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
     || (a.stage === '초안' && (draftRank(b) - draftRank(a) || ((b.draft && b.draft.chars) || 0) - ((a.draft && a.draft.chars) || 0)))
     || (b.age ?? -1) - (a.age ?? -1));
 
+  // 먼저 쓸 글: 볼트 «5-개인/글 초안/먼저 쓸 글.md»의 번호 목록(1. 제목 일부 — 왜). 카드 제목·노트 이름에 그 말이 들어 있으면 잇는다.
+  const next = [];
+  const nextFile = path.join(VAULT, '5-개인', '글 초안', '먼저 쓸 글.md');
+  if (fs.existsSync(nextFile)) {
+    for (const line of split(fs.readFileSync(nextFile, 'utf8')).body.split(/\r?\n/)) {
+      const m = line.match(/^\s*(\d+)[.)]\s+(.+)$/);
+      if (!m) continue;
+      const [key, ...rest] = m[2].split(/\s+[—–]\s+/);
+      const k = norm(key);
+      if (k.length < 2) continue;
+      const hit = items.find((i) => !i.next && [i.title, i.name].some((t) => norm(t).includes(k)));
+      const n = next.length + 1;
+      if (hit) hit.next = n;
+      next.push({ n, key: key.trim(), why: rest.join(' — ').trim(), id: hit ? hit.id : '', stage: hit ? hit.stage : '' });
+    }
+  }
+
   // 가장 최근 «이번 주 글감»
   const lastDate = picks.length ? picks[picks.length - 1].date : '';
   const week = { date: lastDate, ids: picks.filter((p) => p.date === lastDate).map((p) => (notes.get(p.name) || {}).rel).filter(Boolean) };
@@ -324,6 +341,7 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
     at: new Date().toISOString(),
     today: TODAY,
     week,
+    next,
     items,
     deep,
     recent: recentPosts,
@@ -339,6 +357,6 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
   fs.writeFileSync(OUT, JSON.stringify(out));
   const cnt = STAGES.map((s) => s + ' ' + items.filter((i) => i.stage === s).length).join(' · ');
   // 내용은 출력하지 않고 숫자만
-  console.log(`기준일 ${TODAY} · 서랍 ${items.length}개(${cnt}) · 깊숙이 ${deep.length} · 최근 글 ${recentPosts.length} · 블로그 ${blog.length}/인스타 ${insta.length} · 임시저장 ${td.drafts.length}(노트와 이어짐 ${draftByNote.size}) · 메일 글감 ${items.filter((i) => i.src === '메일').length}`);
+  console.log(`기준일 ${TODAY} · 서랍 ${items.length}개(${cnt}) · 깊숙이 ${deep.length} · 최근 글 ${recentPosts.length} · 블로그 ${blog.length}/인스타 ${insta.length} · 임시저장 ${td.drafts.length}(노트와 이어짐 ${draftByNote.size}) · 메일 글감 ${items.filter((i) => i.src === '메일').length} · 먼저 쓸 글 ${next.length}(이어짐 ${next.filter((x) => x.id).length})`);
   console.log('→ ' + path.relative(process.cwd(), OUT));
 })().catch((e) => { console.error(e.message); process.exit(1); });

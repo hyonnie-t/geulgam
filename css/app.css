@@ -96,6 +96,24 @@ main { max-width: 1200px; margin: 0 auto; padding: 0 var(--space-3) var(--space-
 .gate p { color: var(--soft); }
 .gate-msg:empty { display: none; }
 
+/* ---------- 먼저 쓸 글 (볼트 «먼저 쓸 글» 노트 순서, 2026-11-14) ---------- */
+.next { margin-bottom: var(--space-4); }
+.next-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
+.next-card {
+  width: 100%; text-align: left; cursor: pointer; display: flex; align-items: center; gap: var(--space-3);
+  background: color-mix(in srgb, var(--draft) 30%, var(--paper)); border: 2px solid color-mix(in srgb, var(--draft) 80%, var(--ink));
+  border-radius: var(--radius); padding: var(--space-3); box-shadow: var(--shadow); min-height: 48px; color: inherit; font: inherit;
+}
+.next-card.done { background: var(--paper); border-style: dashed; border-color: var(--line); }
+.next-card.nomatch { cursor: default; flex-wrap: wrap; }
+.next-card .n { flex: none; width: 40px; height: 40px; border-radius: 50%; display: grid; place-items: center; background: var(--ink); color: var(--paper); font-size: 18px; font-weight: 700; }
+.next-card .txt { flex: 1; min-width: 0; display: grid; gap: var(--space-1); }
+.next-card .t { font-size: 16px; font-weight: 700; line-height: 1.35; }
+.next-card .why { font-size: 14px; line-height: 1.45; }
+.next-card .sub { font-size: 13px; color: var(--soft); }
+.next-card .st { flex: none; }
+.tag.nextup { background: var(--ink); color: var(--paper); font-weight: 600; }
+
 /* ---------- 이번 주 글감 ---------- */
 .week { margin-bottom: var(--space-4); }
 .week-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }

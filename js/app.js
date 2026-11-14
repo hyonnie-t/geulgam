@@ -101,7 +101,24 @@ function show(d, note) {
   const when = isNaN(at) ? '' : `${at.getMonth() + 1}월 ${at.getDate()}일 ${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
   const st = d.stats || {};
   stamp(`볼트 읽은 때 <b>${esc(when)}</b>${note ? ' · ' + esc(note) : ''} · 쓰인 노트 <b>${st.usedNotes ?? 0}</b>개 / 본문 있는 노트 ${st.withBody ?? '?'}개`);
-  renderWeek(); renderFilters(); renderBoard(); renderDeep(); renderRecent();
+  renderNext(); renderWeek(); renderFilters(); renderBoard(); renderDeep(); renderRecent();
+}
+
+// 먼저 쓸 글: 볼트 «먼저 쓸 글» 노트의 순서(build.js가 next로 넣음). 카드와 이어지면 누르면 상세 창.
+function renderNext() {
+  const list = arr(data.next);
+  $('#next').hidden = !list.length;
+  $('#next-list').innerHTML = list.map((x) => {
+    const it = x.id && data.items.find((i) => i.id === x.id);
+    const done = it && it.stage === '발행';
+    const sub = done ? '다 냈어요 · «먼저 쓸 글» 노트에서 이 줄을 지우면 돼요'
+      : it && it.draft ? draftLine(it.draft) : x.why;
+    const inner = `<span class="n" aria-hidden="true">${x.n}</span>
+      <span class="txt"><span class="t">${esc(it ? it.title : x.key)}</span>${x.why && !done ? `<span class="why">${esc(x.why)}</span>` : ''}${sub && sub !== x.why ? `<span class="sub">${esc(sub)}</span>` : ''}</span>
+      ${done ? '<span class="st">✅<span class="vh"> 다 냄</span></span>' : ''}`;
+    return `<li>${it ? `<button type="button" class="next-card${done ? ' done' : ''}" data-id="${esc(it.id)}">${inner}</button>`
+      : `<div class="next-card nomatch">${inner}<span class="sub">서랍에 같은 제목 카드가 없어요</span></div>`}</li>`;
+  }).join('');
 }
 
 function renderWeek() {
@@ -138,6 +155,7 @@ function renderFilters() {
 function card(it, n) {
   const tags = [`<span class="tag">${SRC_EMOJI[it.src] || ''} ${esc(it.src)}</span>`, ...it.where.map((w) => `<span class="tag where">${esc(w)}</span>`)];
   if (data.week.ids.includes(it.id)) tags.unshift('<span class="tag thisweek">⭐ 이번 주</span>');
+  if (it.next && it.stage !== '발행') tags.unshift(`<span class="tag nextup">👉 먼저 ${it.next}</span>`);
   if (it.draft && it.src !== '임시저장') tags.unshift('<span class="tag tdraft">✍️ 임시저장</span>');
   if (it.stage === '글감' && it.age >= OLD) tags.push(`<span class="tag old${it.age >= VERY_OLD ? ' very' : ''}">묵은 지 ${it.age}일</span>`);
   let line = '';
