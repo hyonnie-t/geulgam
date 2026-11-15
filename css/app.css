@@ -98,6 +98,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 0 var(--space-3) var(--space-
 
 /* ---------- 먼저 쓸 글 (볼트 «먼저 쓸 글» 노트 순서, 2026-11-14) ---------- */
 .next { margin-bottom: var(--space-4); }
+.next-hint { color: var(--soft); font-size: 13px; margin: 0 0 var(--space-2); }
 .next-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); }
 .next-card {
   width: 100%; text-align: left; cursor: pointer; display: flex; align-items: center; gap: var(--space-3);
