@@ -29,5 +29,5 @@
 - 움직임: 카드 보일 때 떠오름(IntersectionObserver), 거르기 줄 붙어 있음(sticky), 상세 창 들고 남(`@starting-style`, overlay 못 쓰는 브라우저는 `data-closing`). `prefers-reduced-motion`에서 끔.
 - 상세 창은 `<dialog closedby="any">` + `showModal()`. 사파리용 바깥 누르기 대체 코드가 app.js `setupDialog`에 있다. 뒤 화면 스크롤은 `overscroll-behavior`로만 막는다(html·body overflow 금지).
 - 화면 확인: 폰 375 · 태블릿 768·1180 · PC 1280, 다크 모드. 내장 브라우저가 숨겨져 있으면 `클로드작업\도구\창없는크롬-화면찍기.mjs`.
-- 홈 화면 앱(아이폰) 로그인은 구글 클라우드 콘솔의 승인된 리디렉션 주소에 `https://hyonnie-t.github.io/geulgam/`를 더해야 된다(효니가 콘솔에서, 배포 뒤).
+- 홈 화면 앱(아이폰) 로그인은 구글 클라우드 콘솔의 승인된 리디렉션 주소에 `https://hyonnie-t.github.io/geulgam/`를 더해야 된다(2026-11-14 Web client에 추가함, 출처: 효니 말 «니가 해»).
 - 새로고침 단추 필수(개인 웹앱 규칙): 서비스워커 갱신 + `geulgam-` 캐시 비우기 + reload.

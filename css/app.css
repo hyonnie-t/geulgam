@@ -102,7 +102,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 0 var(--space-3) var(--space-
 .next-card {
   width: 100%; text-align: left; cursor: pointer; display: flex; align-items: center; gap: var(--space-3);
   background: color-mix(in srgb, var(--draft) 30%, var(--paper)); border: 2px solid color-mix(in srgb, var(--draft) 80%, var(--ink));
-  border-radius: var(--radius); padding: var(--space-3); box-shadow: var(--shadow); min-height: 48px; color: inherit; font: inherit;
+  border-radius: var(--radius); padding: var(--space-3); box-shadow: var(--shadow); min-height: 48px; color: inherit; font: inherit; text-decoration: none;
 }
 .next-card.done { background: var(--paper); border-style: dashed; border-color: var(--line); }
 .next-card.nomatch { cursor: default; flex-wrap: wrap; }

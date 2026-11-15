@@ -317,7 +317,13 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
       const hit = items.find((i) => !i.next && [i.title, i.name].some((t) => norm(t).includes(k)));
       const n = next.length + 1;
       if (hit) hit.next = n;
-      next.push({ n, key: key.trim(), why: rest.join(' — ').trim(), id: hit ? hit.id : '', stage: hit ? hit.stage : '' });
+      // 이어진 카드가 없어도(노트 없이 임시저장으로만 쓰다 발행하면 카드가 사라진다) 제목이 맞는 공개 글이 있으면 발행으로 본다
+      const post = !hit || hit.stage !== '발행' ? posts.filter((p) => p.d && norm(p.t || '').includes(k)).sort((a, b) => (a.d < b.d ? 1 : -1))[0] : null;
+      next.push({
+        n, key: key.trim(), why: rest.join(' — ').trim(), id: hit ? hit.id : '',
+        stage: post ? '발행' : hit ? hit.stage : '',
+        pub: post ? { k: post.k, d: post.d, t: post.t || post.first, u: post.u } : undefined,
+      });
     }
   }
 

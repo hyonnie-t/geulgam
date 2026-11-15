@@ -110,14 +110,17 @@ function renderNext() {
   $('#next').hidden = !list.length;
   $('#next-list').innerHTML = list.map((x) => {
     const it = x.id && data.items.find((i) => i.id === x.id);
-    const done = it && it.stage === '발행';
+    const done = x.stage === '발행' || (it && it.stage === '발행');
     const sub = done ? '다 냈어요 · «먼저 쓸 글» 노트에서 이 줄을 지우면 돼요'
       : it && it.draft ? draftLine(it.draft) : x.why;
+    const title = x.pub && !it ? x.pub.t : it ? it.title : x.key;
     const inner = `<span class="n" aria-hidden="true">${x.n}</span>
-      <span class="txt"><span class="t">${esc(it ? it.title : x.key)}</span>${x.why && !done ? `<span class="why">${esc(x.why)}</span>` : ''}${sub && sub !== x.why ? `<span class="sub">${esc(sub)}</span>` : ''}</span>
+      <span class="txt"><span class="t">${esc(title)}</span>${x.why && !done ? `<span class="why">${esc(x.why)}</span>` : ''}${sub && sub !== x.why ? `<span class="sub">${esc(sub)}</span>` : ''}</span>
       ${done ? '<span class="st">✅<span class="vh"> 다 냄</span></span>' : ''}`;
-    return `<li>${it ? `<button type="button" class="next-card${done ? ' done' : ''}" data-id="${esc(it.id)}">${inner}</button>`
-      : `<div class="next-card nomatch">${inner}<span class="sub">서랍에 같은 제목 카드가 없어요</span></div>`}</li>`;
+    if (it) return `<li><button type="button" class="next-card${done ? ' done' : ''}" data-id="${esc(it.id)}">${inner}</button></li>`;
+    // 카드는 없지만 이미 나간 글: 그 글로 바로 간다
+    if (x.pub && x.pub.u) return `<li><a class="next-card done" href="${esc(x.pub.u)}" target="_blank" rel="noopener">${inner}</a></li>`;
+    return `<li><div class="next-card nomatch">${inner}<span class="sub">서랍에 같은 제목 카드가 없어요</span></div></li>`;
   }).join('');
 }
 
