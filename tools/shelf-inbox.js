@@ -67,8 +67,10 @@ const yq = (s) => JSON.stringify(String(s || '').replace(/\s+/g, ' ').trim()); /
   const inboxDir = path.join(VAULT, '0-수신함');
   const moved = (() => { try { return JSON.parse(fs.readFileSync(MOVED, 'utf8')); } catch { return {}; } })();
   const doneIds = new Set(Object.keys(moved)), doneTitles = new Set();
+  const usedNames = new Set(); // 볼트 전체 노트 이름(build.js는 같은 이름 노트를 하나만 읽어서, 겹치면 서랍에서 가려진다)
   for (const f of walk(VAULT)) {
     if (/[\\/]\.(obsidian|trash)[\\/]/.test(f)) continue;
+    usedNames.add(path.basename(f, '.md').normalize('NFC').toLowerCase());
     const fm = fmOf(fs.readFileSync(f, 'utf8'));
     const sid = prop(fm, '책장id');
     if (sid) doneIds.add(sid);
@@ -94,16 +96,22 @@ const yq = (s) => JSON.stringify(String(s || '').replace(/\s+/g, ' ').trim()); /
       continue;
     }
     const at = /^\d{4}-\d{2}-\d{2}/.test(b.at || '') ? b.at.slice(0, 10) : TODAY;
-    let fname = String(b.t).replace(/[\\/:*?"<>|#^[\]]/g, ' ').replace(/\s+/g, ' ').trim().slice(0, 80) || id;
-    if (fs.existsSync(path.join(inboxDir, fname + '.md'))) fname += ' (책장)';
+    // 파일 이름: 금지 문자를 빼고, 앞의 «.»(숨김 파일)도 뗀다. 볼트 어디든 같은 이름이 있으면 «(책장)», 그래도 겹치면 «(책장 2)»…
+    const base = String(b.t).replace(/[\\/:*?"<>|#^[\]]/g, ' ').replace(/\s+/g, ' ').trim().replace(/^[.\s]+/, '').slice(0, 80).trim() || ('책장 ' + id).replace(/[^\w가-힣 -]/g, '');
+    let fname = base;
+    for (let k = 1; usedNames.has(fname.normalize('NFC').toLowerCase()) || fs.existsSync(path.join(inboxDir, fname + '.md')); k++) fname = `${base} (책장${k > 1 ? ' ' + k : ''})`;
+    usedNames.add(fname.normalize('NFC').toLowerCase());
+    // 제목에 따옴표·« #»·역슬래시가 있으면 build.js가 속성 값을 잘라 읽으니 `제목:`을 쓰지 않는다(카드에는 파일 이름이 보임)
+    const title = String(b.t).replace(/\s+/g, ' ').trim();
+    const safeTitle = !/["\\]|\s#/.test(title);
     const body = [
       '---',
       'type: 글감',
       `출처: 책장 ${at}`,
       `글감날짜: ${at}`,
       '쓸곳: 인스타, 블로그',
-      `제목: ${yq(b.t)}`,
-      b.a ? `저자: ${yq(b.a)}` : null,
+      safeTitle ? `제목: ${yq(title)}` : null,
+      b.a && !/["\\]|\s#/.test(b.a) ? `저자: ${yq(b.a)}` : null,
       `책장id: ${yq(id)}`,
       'tags: [글감, 책장]',
       '---',
