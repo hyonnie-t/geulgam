@@ -90,6 +90,8 @@ for (const s of SOURCES) {
     if (type === '글감' && /오데이|auday/i.test(n.origin)) n.src = '오데이';
     // 메일 소재(클라우드 루틴 «주간 블로그 소재 큐레이션» 보고서에서 옮긴 글감 노트, 출처: 메일 …)
     if (type === '글감' && /메일|뉴스레터/.test(n.origin)) n.src = '메일';
+    // 폰 쪽지함(idea-box) «글·블로그» 쪽지에서 옮긴 글감 노트(tools/ideas.js, 출처: 쪽지 …)
+    if (type === '글감' && /쪽지/.test(n.origin)) n.src = '쪽지';
     const w = prop(fm, '쓸곳');
     if (w) n.where = w.split(/[,\s·]+/).filter(Boolean);
     if (!notes.has(name)) notes.set(name, n);
