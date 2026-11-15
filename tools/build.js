@@ -216,14 +216,23 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
   const SEO_LEAD = 35;
   const seoCal = (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'seo-calendar.json'), 'utf8')).days || []; } catch (e) { console.warn('검색 철 달력을 못 읽었습니다:', e.message); return []; } })();
   const nextDay = (md) => { let d = TODAY.slice(0, 4) + '-' + md; if (d < TODAY) d = (Number(TODAY.slice(0, 4)) + 1) + '-' + md; return d; };
-  const seoDays = seoCal.map((s) => ({ ...s, date: nextDay(s.d), keys: (s.keys || []).map(norm).filter((k) => k.length >= 2) }))
+  // 숫자가 든 말(4·3, 6·25, 12·3)은 norm하면 «43»처럼 연도(1943)에 걸리니 원문에서, 앞뒤가 숫자가 아닐 때만 맞춘다
+  const keyTest = (k) => {
+    if (!/\d/.test(k)) { const nk = norm(k); return nk.length >= 2 ? (t) => norm(t).includes(nk) : null; }
+    const body = k.normalize('NFC').replace(/[.*+?^${}()|[\]\\]/g, '\\$&').replace(/[·.]|\\\./g, '\\s?[·.ㆍ]\\s?').replace(/\s+/g, '\\s*');
+    // 가운뎃점·마침표는 꼭 있어야 한다(«123»·«Python123»은 12·3이 아님)
+    const re = new RegExp('(?<![0-9A-Za-z])' + body + '(?![0-9])');
+    return (t) => re.test((t || '').normalize('NFC'));
+  };
+  const seoDays = seoCal.map((s) => ({ ...s, date: nextDay(s.d), tests: (s.keys || []).map(keyTest).filter(Boolean) }))
     .map((s) => ({ ...s, left: daysBetween(TODAY, s.date) })).filter((s) => s.left <= SEO_LEAD).sort((a, b) => a.left - b.left);
-  const seoDayOf = (words) => seoDays.find((s) => s.keys.some((k) => words.some((w) => w.includes(k))));
-  const seoPulled = new Set();
+  const seoDayOf = (texts) => seoDays.find((s) => s.tests.some((f) => texts.some((t) => t && f(t))));
+  const seoPulled = new Map(); // 노트 이름 → 걸린 날 이름(상세 창 «왜 여기 있나»)
   for (const n of notes.values()) {
     if (chosen.has(n.name) || !['책', '수업', '대학원'].includes(n.src) || n.len < 200) continue;
     if (n.used.some((u) => WRITE_KIND.test(usedKind(u)))) continue;
-    if (seoDayOf([n.name, n.title].map(norm))) { add(n); seoPulled.add(n.name); }
+    const day = seoDayOf([n.name, n.title]);
+    if (day) { add(n); seoPulled.set(n.name, day.label); }
   }
   // 최근 60일에 이미 나간 글과 이어지는 노트도 «발행» 칸에(노트 → 글이 실제로 된 것)
   const recentPub = posts.filter((p) => p.d && daysBetween(p.d, TODAY) <= 60);
@@ -278,7 +287,7 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
       src: n.src,
       where: n.where,
       stage,
-      stageWhy: why || (mine.length ? '이번 주 글감으로 뽑힘' : n.type === '글감' ? '글감 노트' : seoPulled.has(n.name) ? '검색 철이 가까워 서랍 깊숙이에서 꺼냄' : ''),
+      stageWhy: why || (mine.length ? '이번 주 글감으로 뽑힘' : n.type === '글감' ? '글감 노트' : seoPulled.has(n.name) ? `«${seoPulled.get(n.name)}» 검색 철이 가까워 서랍 깊숙이에서 꺼냄` : ''),
       since: since || undefined,
       age: since ? daysBetween(since, TODAY) : undefined,
       picks: mine.map((p) => ({ d: p.date, why: p.why, ask: p.ask })),
@@ -324,20 +333,23 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
   let trends = [];
   if (!OFFLINE) {
     try {
-      const res = await fetch('https://trends.google.com/trending/rss?geo=KR', { headers: { 'User-Agent': 'Mozilla/5.0 (geulgam drawer)' } });
+      const res = await fetch('https://trends.google.com/trending/rss?geo=KR', { headers: { 'User-Agent': 'Mozilla/5.0 (geulgam drawer)' }, signal: AbortSignal.timeout(10000) });
       if (!res.ok) throw new Error('trends ' + res.status);
-      trends = [...(await res.text()).split('<item>').slice(1)].map((it) => ((it.match(/<title>([^<]*)<\/title>/) || [])[1] || '').trim()).filter((t) => norm(t).length >= 2);
+      const dec = (s) => s.replace(/<!\[CDATA\[([\s\S]*?)\]\]>/g, '$1').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&quot;/g, '"').replace(/&#39;|&apos;/g, "'").replace(/&amp;/g, '&').trim();
+      // «투자»·«골프» 같은 두 글자 일반어가 아무 노트에나 걸리지 않게 세 글자 이상만
+      trends = [...(await res.text()).split('<item>').slice(1)].map((it) => dec((it.match(/<title>([\s\S]*?)<\/title>/) || [])[1] || '')).filter((t) => norm(t).length >= 3);
     } catch (e) {
       console.warn('구글 트렌드를 못 읽어 달력만 씁니다:', e.message);
     }
   }
   for (const i of items) {
     if (i.stage === '발행') continue;
+    // 달력(해마다 오는 검색 철)이 먼저, 트렌드(오늘 하루 몰린 말)는 그다음
+    const day = seoDayOf([i.title, i.name]);
+    if (day) { i.seo = { label: day.label, d: day.date, left: day.left }; continue; }
     const words = [i.title, i.name].map(norm);
     const tr = trends.find((t) => words.some((w) => w.includes(norm(t))));
-    if (tr) { i.seo = { trend: true, term: tr, label: '오늘 많이 찾는 말' }; continue; }
-    const day = seoDayOf(words);
-    if (day) i.seo = { label: day.label, d: day.date, left: day.left };
+    if (tr) i.seo = { trend: true, term: tr, label: '오늘 많이 찾는 말' };
   }
 
   // 먼저 쓸 글(2026-11-15 자동 갱신, 출처: 효니 말 "니가 알아서 새로운 먼저 쓸 것 목록을 갱신하거나 옮기는 기능을 줘야지")
@@ -384,8 +396,8 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
   const autoPools = [
     // items는 이미 초안 칸 안에서 임시저장·많이 쓴 순
     [open.filter((i) => i.stage === '초안' && i.draft), (i) => `임시저장 ${fmtN(i.draft.chars)}자 — 많이 써 둔 글부터 마무리${i.seo ? ' · 🔎 ' + seoWhy(i) : ''}`],
-    // 검색 철(SEO): 오늘 많이 찾는 말 > 날짜가 가까운 것. 쓰던 글·이번 주 글감을 다 밀어내지 않게 2칸까지
-    [open.filter((i) => i.seo).sort((a, b) => (b.seo.trend ? 1 : 0) - (a.seo.trend ? 1 : 0) || (a.seo.left ?? 99) - (b.seo.left ?? 99)).slice(0, 2), (i) => '🔎 ' + seoWhy(i)],
+    // 검색 철(SEO): 날짜가 가까운 것 > 오늘 많이 찾는 말. 쓰던 글·이번 주 글감을 다 밀어내지 않게 2칸까지
+    [open.filter((i) => i.seo).sort((a, b) => (a.seo.trend ? 1 : 0) - (b.seo.trend ? 1 : 0) || (a.seo.left ?? 99) - (b.seo.left ?? 99)).slice(0, 2), (i) => '🔎 ' + seoWhy(i)],
     [open.filter((i) => i.stage === '초안' && !i.draft), () => '쓰기 시작한 글 — 이어서 쓰기'],
     [open.filter((i) => i.stage === '글감' && weekIds.has(i.id)), () => '이번 주 글감으로 뽑힘'],
     [open.filter((i) => i.stage === '글감' && i.age >= 21).sort((a, b) => b.age - a.age), (i) => `묵은 지 ${i.age}일 — 더 묵기 전에`],
