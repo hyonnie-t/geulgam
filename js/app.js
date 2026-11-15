@@ -7,7 +7,7 @@ const STAGES = [
   { key: '초안', label: '초안', emoji: '✏️', empty: '쓰는 중인 글이 없어요. 옵시디언에서 그 노트에 «글감: 초안»을 적으면 여기로 와요.' },
   { key: '발행', label: '발행', emoji: '📮', empty: '최근 60일에 나간 글과 이어진 노트가 없어요.' },
 ];
-const SRC_EMOJI = { 책: '📚', 수업: '🏫', 대학원: '🎓', 오데이: '🎙️', 메일: '📮', 쪽지: '💌', 임시저장: '✍️', 수신함: '📥', 개인: '🌿', 업무: '🗂️' };
+const SRC_EMOJI = { 책: '📚', 수업: '🏫', 대학원: '🎓', 오데이: '🎙️', 메일: '📮', 쪽지: '💌', 책장: '📚', 임시저장: '✍️', 수신함: '📥', 개인: '🌿', 업무: '🗂️' };
 const TISTORY_WRITE = 'https://0hyonnie.tistory.com/manage/newpost';
 // 임시저장본 한 줄 요약: «3,467자 · ★ 채울 곳 3 · ☆ 확인 5»
 const draftLine = (d) => [`${Number(d.chars || 0).toLocaleString('ko-KR')}자`, d.fill ? `★ 채울 곳 ${d.fill}` : '', d.guess ? `☆ 확인 ${d.guess}` : '', d.updated ? `${fmtDay(d.updated)} 고침` : ''].filter(Boolean).join(' · ');
