@@ -318,9 +318,16 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
       const [key, ...rest] = m[2].split(/\s+[—–]\s+/);
       const k = norm(key);
       if (k.length < 2) continue;
-      const hit = items.find((i) => !pinned.some((x) => x.id === i.id) && [i.title, i.name].some((t) => norm(t).includes(k)));
-      // 이어진 카드가 없어도(노트 없이 임시저장으로만 쓰다 발행하면 카드가 사라진다) 제목이 맞는 공개 글이 있으면 발행으로 본다
-      const post = !hit || hit.stage !== '발행' ? posts.filter((p) => p.d && norm(p.t || '').includes(k)).sort((a, b) => (a.d < b.d ? 1 : -1))[0] : null;
+      const same = (i) => [i.title, i.name].some((t) => norm(t).includes(k));
+      // 앞 줄과 같은 카드를 가리키는 줄은 건너뛴다(«카드 없음»으로 남지 않게)
+      if (pinned.some((x) => x.id && same(items.find((i) => i.id === x.id) || {}))) continue;
+      const hit = items.find(same);
+      // 이어진 카드가 없어도(노트 없이 임시저장으로만 쓰다 발행하면 카드가 사라진다) 제목이 맞는 공개 글이 있으면 발행으로 본다.
+      // 단 그 줄을 적은 날(줄 끝 «YYYY-MM-DD»)·카드가 글감이 된 날 이후 글만 — 옛 글과 제목이 겹쳐 쓰는 중인 글이 사라지지 않게.
+      // 둘 다 없으면 최근 DONE_DAYS일 안의 글만 본다.
+      const lineDay = (m[2].match(/(\d{4}-\d{2}-\d{2})/) || [])[1] || '';
+      const since = lineDay || (hit && hit.since) || new Date(new Date(TODAY) - DONE_DAYS * 864e5).toISOString().slice(0, 10);
+      const post = !hit || hit.stage !== '발행' ? posts.filter((p) => p.d && p.d >= since && norm(p.t || '').includes(k)).sort((a, b) => (a.d < b.d ? 1 : -1))[0] : null;
       const lastPub = post || (hit && hit.stage === '발행' ? hit.pub[hit.pub.length - 1] : null);
       pinned.push({
         key: key.trim(), why: rest.join(' — ').trim(), id: hit ? hit.id : '',
@@ -346,7 +353,8 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
   ];
   for (const [pool, why] of autoPools) {
     for (const i of pool) {
-      if (active.length >= NEXT_MAX) break;
+      // 카드와 안 이어진 노트 줄(오타·이름 바뀜)은 자리를 차지하지 않는다
+      if (active.filter((x) => x.id).length >= NEXT_MAX) break;
       if (taken.has(i.id)) continue;
       taken.add(i.id);
       active.push({ key: i.title, why: why(i), id: i.id, stage: i.stage, auto: true });
