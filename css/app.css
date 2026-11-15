@@ -114,6 +114,7 @@ main { max-width: 1200px; margin: 0 auto; padding: 0 var(--space-3) var(--space-
 .next-card .sub { font-size: 13px; color: var(--soft); }
 .next-card .st { flex: none; }
 .tag.nextup { background: var(--ink); color: var(--paper); font-weight: 600; }
+.tag.seo { border: 1px solid var(--ink); background: var(--paper); font-weight: 600; }
 
 /* ---------- 이번 주 글감 ---------- */
 .week { margin-bottom: var(--space-4); }

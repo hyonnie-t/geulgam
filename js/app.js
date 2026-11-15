@@ -159,6 +159,8 @@ function renderFilters() {
 function card(it, n) {
   const tags = [`<span class="tag">${SRC_EMOJI[it.src] || ''} ${esc(it.src)}</span>`, ...it.where.map((w) => `<span class="tag where">${esc(w)}</span>`)];
   if (data.week.ids.includes(it.id)) tags.unshift('<span class="tag thisweek">⭐ 이번 주</span>');
+  // 검색 철(build.js가 seo로 넣음): 해마다 검색이 몰리는 날이 가깝거나 오늘 많이 찾는 말이 제목에 있음
+  if (it.seo && it.stage !== '발행') tags.unshift(`<span class="tag seo">🔎 ${it.seo.trend ? '지금 많이 찾음' : `${esc(it.seo.label)} D-${it.seo.left}`}</span>`);
   if (it.next && it.stage !== '발행') tags.unshift(`<span class="tag nextup">👉 먼저 ${it.next}</span>`);
   if (it.draft && it.src !== '임시저장') tags.unshift('<span class="tag tdraft">✍️ 임시저장</span>');
   if (it.stage === '글감' && it.age >= OLD) tags.push(`<span class="tag old${it.age >= VERY_OLD ? ' very' : ''}">묵은 지 ${it.age}일</span>`);

@@ -211,6 +211,20 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
   for (const n of notes.values()) {
     if (n.stageProp || n.type === '글감' || n.used.some((u) => WRITE_KIND.test(usedKind(u)))) add(n);
   }
+  // 검색 철 달력(아래 «검색 철» 설명): 날짜가 가까운 날의 말이 이름에 든 노트는 서랍 깊숙이에서도 꺼내 글감 칸에 올린다
+  // (책·수업·대학원 노트, 본문 200자 이상, 아직 블로그·인스타에 안 쓴 것)
+  const SEO_LEAD = 35;
+  const seoCal = (() => { try { return JSON.parse(fs.readFileSync(path.join(__dirname, 'seo-calendar.json'), 'utf8')).days || []; } catch (e) { console.warn('검색 철 달력을 못 읽었습니다:', e.message); return []; } })();
+  const nextDay = (md) => { let d = TODAY.slice(0, 4) + '-' + md; if (d < TODAY) d = (Number(TODAY.slice(0, 4)) + 1) + '-' + md; return d; };
+  const seoDays = seoCal.map((s) => ({ ...s, date: nextDay(s.d), keys: (s.keys || []).map(norm).filter((k) => k.length >= 2) }))
+    .map((s) => ({ ...s, left: daysBetween(TODAY, s.date) })).filter((s) => s.left <= SEO_LEAD).sort((a, b) => a.left - b.left);
+  const seoDayOf = (words) => seoDays.find((s) => s.keys.some((k) => words.some((w) => w.includes(k))));
+  const seoPulled = new Set();
+  for (const n of notes.values()) {
+    if (chosen.has(n.name) || !['책', '수업', '대학원'].includes(n.src) || n.len < 200) continue;
+    if (n.used.some((u) => WRITE_KIND.test(usedKind(u)))) continue;
+    if (seoDayOf([n.name, n.title].map(norm))) { add(n); seoPulled.add(n.name); }
+  }
   // 최근 60일에 이미 나간 글과 이어지는 노트도 «발행» 칸에(노트 → 글이 실제로 된 것)
   const recentPub = posts.filter((p) => p.d && daysBetween(p.d, TODAY) <= 60);
   for (const n of notes.values()) {
@@ -264,7 +278,7 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
       src: n.src,
       where: n.where,
       stage,
-      stageWhy: why || (mine.length ? '이번 주 글감으로 뽑힘' : n.type === '글감' ? '글감 노트' : ''),
+      stageWhy: why || (mine.length ? '이번 주 글감으로 뽑힘' : n.type === '글감' ? '글감 노트' : seoPulled.has(n.name) ? '검색 철이 가까워 서랍 깊숙이에서 꺼냄' : ''),
       since: since || undefined,
       age: since ? daysBetween(since, TODAY) : undefined,
       picks: mine.map((p) => ({ d: p.date, why: p.why, ask: p.ask })),
@@ -303,6 +317,28 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
   items.sort((a, b) => STAGES.indexOf(a.stage) - STAGES.indexOf(b.stage)
     || (a.stage === '초안' && (draftRank(b) - draftRank(a) || ((b.draft && b.draft.chars) || 0) - ((a.draft && a.draft.chars) || 0)))
     || (b.age ?? -1) - (a.age ?? -1));
+
+  // 검색 철(SEO, 2026-11-15, 출처: 효니 말 "내가 말한 시의성은 seo 검색 유입이 잘 될 거 같은 거임"):
+  // ① tools/seo-calendar.json의 해마다 검색이 몰리는 날 35일 전~당일에 노트 이름·카드 제목이 그 말을 담고 있으면
+  // ② 구글 트렌드 한국 «오늘 많이 찾는 말»(공개 RSS, 내 자료는 안 보냄)이 카드 제목에 들어 있으면 → item.seo
+  let trends = [];
+  if (!OFFLINE) {
+    try {
+      const res = await fetch('https://trends.google.com/trending/rss?geo=KR', { headers: { 'User-Agent': 'Mozilla/5.0 (geulgam drawer)' } });
+      if (!res.ok) throw new Error('trends ' + res.status);
+      trends = [...(await res.text()).split('<item>').slice(1)].map((it) => ((it.match(/<title>([^<]*)<\/title>/) || [])[1] || '').trim()).filter((t) => norm(t).length >= 2);
+    } catch (e) {
+      console.warn('구글 트렌드를 못 읽어 달력만 씁니다:', e.message);
+    }
+  }
+  for (const i of items) {
+    if (i.stage === '발행') continue;
+    const words = [i.title, i.name].map(norm);
+    const tr = trends.find((t) => words.some((w) => w.includes(norm(t))));
+    if (tr) { i.seo = { trend: true, term: tr, label: '오늘 많이 찾는 말' }; continue; }
+    const day = seoDayOf(words);
+    if (day) i.seo = { label: day.label, d: day.date, left: day.left };
+  }
 
   // 먼저 쓸 글(2026-11-15 자동 갱신, 출처: 효니 말 "니가 알아서 새로운 먼저 쓸 것 목록을 갱신하거나 옮기는 기능을 줘야지")
   // ① 볼트 «5-개인/글 초안/먼저 쓸 글.md»의 번호 목록(1. 제목 일부 — 왜)이 맨 앞(효니가 정한 순서, 없어도 됨)
@@ -344,9 +380,12 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
   const weekIds = new Set(picks.filter((p) => p.date === (picks.length ? picks[picks.length - 1].date : '')).map((p) => (notes.get(p.name) || {}).rel).filter(Boolean));
   const open = items.filter((i) => i.stage !== '발행' && !taken.has(i.id) && !(i.draft && i.draft.title === '(제목 없음)'));
   const fmtN = (v) => Number(v || 0).toLocaleString('ko-KR');
+  const seoWhy = (i) => (i.seo ? (i.seo.trend ? `오늘 많이 찾는 말 «${i.seo.term}»` : `«${i.seo.label}» 검색이 느는 때 — D-${i.seo.left}`) : '');
   const autoPools = [
     // items는 이미 초안 칸 안에서 임시저장·많이 쓴 순
-    [open.filter((i) => i.stage === '초안' && i.draft), (i) => `임시저장 ${fmtN(i.draft.chars)}자 — 많이 써 둔 글부터 마무리`],
+    [open.filter((i) => i.stage === '초안' && i.draft), (i) => `임시저장 ${fmtN(i.draft.chars)}자 — 많이 써 둔 글부터 마무리${i.seo ? ' · 🔎 ' + seoWhy(i) : ''}`],
+    // 검색 철(SEO): 오늘 많이 찾는 말 > 날짜가 가까운 것. 쓰던 글·이번 주 글감을 다 밀어내지 않게 2칸까지
+    [open.filter((i) => i.seo).sort((a, b) => (b.seo.trend ? 1 : 0) - (a.seo.trend ? 1 : 0) || (a.seo.left ?? 99) - (b.seo.left ?? 99)).slice(0, 2), (i) => '🔎 ' + seoWhy(i)],
     [open.filter((i) => i.stage === '초안' && !i.draft), () => '쓰기 시작한 글 — 이어서 쓰기'],
     [open.filter((i) => i.stage === '글감' && weekIds.has(i.id)), () => '이번 주 글감으로 뽑힘'],
     [open.filter((i) => i.stage === '글감' && i.age >= 21).sort((a, b) => b.age - a.age), (i) => `묵은 지 ${i.age}일 — 더 묵기 전에`],
@@ -404,6 +443,6 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
   fs.writeFileSync(OUT, JSON.stringify(out));
   const cnt = STAGES.map((s) => s + ' ' + items.filter((i) => i.stage === s).length).join(' · ');
   // 내용은 출력하지 않고 숫자만
-  console.log(`기준일 ${TODAY} · 서랍 ${items.length}개(${cnt}) · 깊숙이 ${deep.length} · 최근 글 ${recentPosts.length} · 블로그 ${blog.length}/인스타 ${insta.length} · 임시저장 ${td.drafts.length}(노트와 이어짐 ${draftByNote.size}) · 메일 글감 ${items.filter((i) => i.src === '메일').length} · 먼저 쓸 글 ${next.length}(이어짐 ${next.filter((x) => x.id).length})`);
+  console.log(`기준일 ${TODAY} · 서랍 ${items.length}개(${cnt}) · 깊숙이 ${deep.length} · 최근 글 ${recentPosts.length} · 블로그 ${blog.length}/인스타 ${insta.length} · 임시저장 ${td.drafts.length}(노트와 이어짐 ${draftByNote.size}) · 메일 글감 ${items.filter((i) => i.src === '메일').length} · 먼저 쓸 글 ${next.length}(이어짐 ${next.filter((x) => x.id).length}) · 검색 철 ${seoDays.length}개 날·트렌드 ${trends.length}개 → 맞은 카드 ${items.filter((i) => i.seo).length}`);
   console.log('→ ' + path.relative(process.cwd(), OUT));
 })().catch((e) => { console.error(e.message); process.exit(1); });
