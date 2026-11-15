@@ -2,7 +2,7 @@
 // 쪽지 글감 옮기기 (2026-11-15, 출처: 효니 말 «글감 떠오른 거 메모는 쪽지함에 넣어? 여기에 넣어?» → 쪽지함으로, «쪽지 글감 잇기도 해»)
 // 폰 쪽지함(idea-box, Firebase users/{uid}/ideas)에서 주제가 «글·블로그»인 쪽지를 읽어
 // 볼트 0-수신함에 `type: 글감`, `출처: 쪽지 YYYY-MM-DD` 노트로 만든다 → build.js가 서랍에 «💌 쪽지»로 올린다.
-// 이미 옮긴 쪽지는 노트 속성 `쪽지id:`로 알아보고(볼트 어디로 옮겼든) 다시 만들지 않는다.
+// 이미 옮긴 쪽지는 노트 속성 `쪽지id:`(볼트 어디로 옮겼든)와 ideas-moved.local.json(노트를 지웠어도)으로 알아보고 다시 만들지 않는다.
 //   node tools/ideas.js            미리보기: 옮길 쪽지 수만 출력(아무것도 쓰지 않음)
 //   node tools/ideas.js --write    노트 만들기
 //   node tools/ideas.js --write --reply   노트 만들고, 그 쪽지를 «끝남» + 답장 «글감 서랍으로 옮겼어요»로(쪽지함 inbox.js done과 같은 칸)
@@ -55,11 +55,18 @@ function walk(dir, out = []) {
 }
 if (!fs.existsSync(INBOX)) { console.error('볼트 0-수신함을 못 찾았어요:', INBOX); process.exit(1); }
 const known = new Set();
+const names = new Set(); // 볼트 전체 노트 이름(build.js는 이름이 같으면 먼저 읽은 노트만 남기므로 겹치지 않게)
 for (const f of walk(VAULT)) {
-  const head = fs.readFileSync(f, 'utf8').slice(0, 1500);
-  const m = head.match(/^---\r?\n[\s\S]*?^쪽지id:[ \t]*["']?([\w-]+)/m);
+  names.add(path.basename(f, '.md').normalize('NFC').toLowerCase());
+  const fm = (fs.readFileSync(f, 'utf8').replace(/^﻿/, '').match(/^---\r?\n([\s\S]*?)\r?\n---/) || [])[1] || '';
+  const m = fm.match(/^쪽지id:[ \t]*["']?([\w-]+)/m);
   if (m) known.add(m[1]);
 }
+// 한 번 옮긴 쪽지 id 기억(효니가 노트를 지워도 다시 안 만들게). 비공개라 *.local.json(gitignore)
+const MOVED = path.join(ROOT, 'ideas-moved.local.json');
+let moved = [];
+try { moved = JSON.parse(fs.readFileSync(MOVED, 'utf8')).ids || []; } catch (e) {}
+for (const id of moved) known.add(id);
 
 // 한국 날짜
 const kday = (ms) => new Date(ms + 9 * 3600e3).toISOString().slice(0, 10);
@@ -81,8 +88,12 @@ const madeIds = [];
 for (const x of todo.sort((a, b) => a.at - b.at)) {
   const day = kday(x.at || Date.now());
   let name = titleOf(x.t) || `쪽지 글감 ${day}`;
-  if (fs.existsSync(path.join(INBOX, name + '.md'))) name = `${name} (쪽지 ${x.id.slice(-4)})`;
+  // 볼트 어디든 같은 이름이 있거나 Windows 예약 이름(CON·NUL…)이면 쪽지 id 끝 4글자를 붙인다
+  const taken = (s) => names.has(s.normalize('NFC').toLowerCase()) || /^(con|prn|aux|nul|com\d|lpt\d)$/i.test(s);
+  if (taken(name)) name = `${name} (쪽지 ${x.id.slice(-4)})`;
+  const nPh = (Array.isArray(x.ph) ? x.ph : Object.values(x.ph || {})).filter(Boolean).length;
   const text = String(x.t).replace(/\r\n/g, '\n').trim();
+  // 본문은 쪽지 글만(서랍 카드 첫 줄 140자가 쪽지 글이 되게). 설명은 속성으로
   const note = [
     '---',
     'type: 글감',
@@ -91,17 +102,20 @@ for (const x of todo.sort((a, b) => a.at - b.at)) {
     '쓸곳: 블로그',
     'tags: [글감, 쪽지]',
     `쪽지id: ${x.id}`,
+    ...(x.hot ? ['급해요: true'] : []),
+    ...(nPh ? [`쪽지사진: ${nPh}장(쪽지함에)`] : []),
     '---',
+    '<!-- 폰 쪽지함에서 옮긴 글감(geulgam tools/ideas.js). 노트를 지워도 다시 만들지 않는다. 글은 효니 경험과 문체로. -->',
     text,
-    '',
-    `- 쪽지: 폰 쪽지함 «${TAG}» ${day}${x.hot ? ' (급해요)' : ''}${(Array.isArray(x.ph) ? x.ph : Object.values(x.ph || {})).filter(Boolean).length ? ' · 사진은 쪽지함에' : ''}`,
-    '- 효니가 쪽지로 남긴 글감이다. 글은 효니 경험과 문체로.',
     '',
   ].join('\n');
   if (WRITE) {
     fs.writeFileSync(path.join(INBOX, name + '.md'), note, 'utf8');
+    names.add(name.normalize('NFC').toLowerCase());
     made++;
     madeIds.push(x.id);
+    moved.push(x.id);
+    fs.writeFileSync(MOVED, JSON.stringify({ ids: moved }));
   }
 }
 
