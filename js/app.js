@@ -104,17 +104,18 @@ function show(d, note) {
   renderNext(); renderWeek(); renderFilters(); renderBoard(); renderDeep(); renderRecent();
 }
 
-// 먼저 쓸 글: 볼트 «먼저 쓸 글» 노트의 순서(build.js가 next로 넣음). 카드와 이어지면 누르면 상세 창.
+// 먼저 쓸 글: build.js가 next로 넣음 — 볼트 «먼저 쓸 글» 노트 순서가 앞, 빈자리는 자동(auto), 발행된 줄은 맨 뒤(done)에 잠깐 남았다 빠짐(2026-11-15).
+// 카드와 이어지면 누르면 상세 창.
 function renderNext() {
   const list = arr(data.next);
   $('#next').hidden = !list.length;
   $('#next-list').innerHTML = list.map((x) => {
     const it = x.id && data.items.find((i) => i.id === x.id);
-    const done = x.stage === '발행' || (it && it.stage === '발행');
-    const sub = done ? '다 냈어요 · «먼저 쓸 글» 노트에서 이 줄을 지우면 돼요'
-      : it && it.draft ? draftLine(it.draft) : x.why;
+    const done = x.done || x.stage === '발행' || (it && it.stage === '발행');
+    const sub = done ? '다 냈어요 · 2주 뒤 저절로 빠져요'
+      : it && it.draft && !x.auto ? draftLine(it.draft) : x.auto ? '🤖 자동으로 골랐어요' : x.why;
     const title = x.pub && !it ? x.pub.t : it ? it.title : x.key;
-    const inner = `<span class="n" aria-hidden="true">${x.n}</span>
+    const inner = `<span class="n" aria-hidden="true">${done ? '✓' : x.n}</span>
       <span class="txt"><span class="t">${esc(title)}</span>${x.why && !done ? `<span class="why">${esc(x.why)}</span>` : ''}${sub && sub !== x.why ? `<span class="sub">${esc(sub)}</span>` : ''}</span>
       ${done ? '<span class="st">✅<span class="vh"> 다 냄</span></span>' : ''}`;
     if (it) return `<li><button type="button" class="next-card${done ? ' done' : ''}" data-id="${esc(it.id)}">${inner}</button></li>`;

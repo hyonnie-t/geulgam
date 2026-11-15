@@ -9,7 +9,7 @@ const ROOT = path.resolve(__dirname, '..');
 const args = process.argv.slice(2);
 const opt = (k, d) => { const i = args.indexOf(k); return i >= 0 ? args[i + 1] : d; };
 const VAULT = path.resolve(opt('--vault', path.join(ROOT, '..', '..', '클로드작업', '옵시디언', '효니노트')));
-const SHELF = path.resolve(ROOT, '..', 'bookshelf', 'data');
+const SHELF = path.resolve(opt('--shelf', path.join(ROOT, '..', 'bookshelf', 'data')));
 const OUT = path.resolve(opt('--out', path.join(ROOT, 'drawer.local.json')));
 const TODAY = opt('--date', new Date(Date.now() + 9 * 3600e3).toISOString().slice(0, 10));
 const OFFLINE = args.includes('--offline');
@@ -304,8 +304,12 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
     || (a.stage === '초안' && (draftRank(b) - draftRank(a) || ((b.draft && b.draft.chars) || 0) - ((a.draft && a.draft.chars) || 0)))
     || (b.age ?? -1) - (a.age ?? -1));
 
-  // 먼저 쓸 글: 볼트 «5-개인/글 초안/먼저 쓸 글.md»의 번호 목록(1. 제목 일부 — 왜). 카드 제목·노트 이름에 그 말이 들어 있으면 잇는다.
-  const next = [];
+  // 먼저 쓸 글(2026-11-15 자동 갱신, 출처: 효니 말 "니가 알아서 새로운 먼저 쓸 것 목록을 갱신하거나 옮기는 기능을 줘야지")
+  // ① 볼트 «5-개인/글 초안/먼저 쓸 글.md»의 번호 목록(1. 제목 일부 — 왜)이 맨 앞(효니가 정한 순서, 없어도 됨)
+  // ② 빈자리는 서랍에서 저절로: 임시저장(많이 쓴 순) > 쓰기 시작한 초안 > 이번 주 글감 > 묵은 글감(오래된 순), 모두 NEXT_MAX칸까지
+  // ③ 발행된 줄은 칸을 차지하지 않고 «다 냄»(auto/done 표시)으로 맨 뒤에 DONE_DAYS일 남았다가 저절로 빠진다. 노트를 손으로 고칠 일 없음.
+  const NEXT_MAX = 5, DONE_DAYS = 14;
+  const pinned = [];
   const nextFile = path.join(VAULT, '5-개인', '글 초안', '먼저 쓸 글.md');
   if (fs.existsSync(nextFile)) {
     for (const line of split(fs.readFileSync(nextFile, 'utf8')).body.split(/\r?\n/)) {
@@ -314,18 +318,47 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
       const [key, ...rest] = m[2].split(/\s+[—–]\s+/);
       const k = norm(key);
       if (k.length < 2) continue;
-      const hit = items.find((i) => !i.next && [i.title, i.name].some((t) => norm(t).includes(k)));
-      const n = next.length + 1;
-      if (hit) hit.next = n;
+      const hit = items.find((i) => !pinned.some((x) => x.id === i.id) && [i.title, i.name].some((t) => norm(t).includes(k)));
       // 이어진 카드가 없어도(노트 없이 임시저장으로만 쓰다 발행하면 카드가 사라진다) 제목이 맞는 공개 글이 있으면 발행으로 본다
       const post = !hit || hit.stage !== '발행' ? posts.filter((p) => p.d && norm(p.t || '').includes(k)).sort((a, b) => (a.d < b.d ? 1 : -1))[0] : null;
-      next.push({
-        n, key: key.trim(), why: rest.join(' — ').trim(), id: hit ? hit.id : '',
+      const lastPub = post || (hit && hit.stage === '발행' ? hit.pub[hit.pub.length - 1] : null);
+      pinned.push({
+        key: key.trim(), why: rest.join(' — ').trim(), id: hit ? hit.id : '',
         stage: post ? '발행' : hit ? hit.stage : '',
         pub: post ? { k: post.k, d: post.d, t: post.t || post.first, u: post.u } : undefined,
+        pubDay: lastPub ? lastPub.d || '' : '',
       });
     }
   }
+  const active = pinned.filter((x) => x.stage !== '발행');
+  // 날짜를 모르는 발행 줄은 남겨 둘 근거가 없으니 뺀다
+  const done = pinned.filter((x) => x.stage === '발행' && x.pubDay && daysBetween(x.pubDay, TODAY) <= DONE_DAYS);
+  const taken = new Set(pinned.map((x) => x.id).filter(Boolean));
+  const weekIds = new Set(picks.filter((p) => p.date === (picks.length ? picks[picks.length - 1].date : '')).map((p) => (notes.get(p.name) || {}).rel).filter(Boolean));
+  const open = items.filter((i) => i.stage !== '발행' && !taken.has(i.id) && !(i.draft && i.draft.title === '(제목 없음)'));
+  const fmtN = (v) => Number(v || 0).toLocaleString('ko-KR');
+  const autoPools = [
+    // items는 이미 초안 칸 안에서 임시저장·많이 쓴 순
+    [open.filter((i) => i.stage === '초안' && i.draft), (i) => `임시저장 ${fmtN(i.draft.chars)}자 — 많이 써 둔 글부터 마무리`],
+    [open.filter((i) => i.stage === '초안' && !i.draft), () => '쓰기 시작한 글 — 이어서 쓰기'],
+    [open.filter((i) => i.stage === '글감' && weekIds.has(i.id)), () => '이번 주 글감으로 뽑힘'],
+    [open.filter((i) => i.stage === '글감' && i.age >= 21).sort((a, b) => b.age - a.age), (i) => `묵은 지 ${i.age}일 — 더 묵기 전에`],
+  ];
+  for (const [pool, why] of autoPools) {
+    for (const i of pool) {
+      if (active.length >= NEXT_MAX) break;
+      if (taken.has(i.id)) continue;
+      taken.add(i.id);
+      active.push({ key: i.title, why: why(i), id: i.id, stage: i.stage, auto: true });
+    }
+  }
+  for (const i of items) delete i.next;
+  const next = [...active, ...done.map((x) => ({ ...x, done: true }))].map((x, idx) => {
+    const { pubDay, ...rest } = x;
+    const n = idx + 1;
+    if (!x.done && x.id) { const it = items.find((i) => i.id === x.id); if (it) it.next = n; }
+    return { n, ...rest };
+  });
 
   // 가장 최근 «이번 주 글감»
   const lastDate = picks.length ? picks[picks.length - 1].date : '';
