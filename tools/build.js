@@ -92,6 +92,8 @@ for (const s of SOURCES) {
     if (type === '글감' && /메일|뉴스레터/.test(n.origin)) n.src = '메일';
     // 폰 쪽지함(idea-box) «글·블로그» 쪽지에서 옮긴 글감 노트(tools/ideas.js, 출처: 쪽지 …)
     if (type === '글감' && /쪽지/.test(n.origin)) n.src = '쪽지';
+    // 책장 앱 «글감 서랍으로 보내기»로 고른 책(tools/shelf-inbox.js가 옮긴 글감 노트, 출처: 책장 …)
+    if (type === '글감' && /책장/.test(n.origin)) n.src = '책장';
     const w = prop(fm, '쓸곳');
     if (w) n.where = w.split(/[,\s·]+/).filter(Boolean);
     if (!notes.has(name)) notes.set(name, n);
@@ -155,6 +157,8 @@ function instaPosts() {
 const bare = (s) => (s || '').replace(/^\([^)]*\)\s*/, '').replace(/^.*?\s-\s/, '').replace(/\s*\([^)]*\)\s*$/, '');
 // 쓰임 줄의 «글 제목»: "2026-11-10 블로그 «제목»"
 const usedTitles = (used) => used.map((u) => (u.match(/«([^»]+)»/) || [])[1]).filter(Boolean).map(norm).filter((t) => t.length >= 4);
+// 책장에서 보낸 책 글감도 책 노트처럼 책 제목으로 맞춘다
+const isBook = (n) => n.src === '책' || n.src === '책장';
 function matchPosts(n, posts) {
   const keys = [...new Set([norm(n.title), norm(n.name), norm(bare(n.name)), norm(bare(n.title))])].filter((k) => k.length >= 2);
   const byUsed = usedTitles(n.used);
@@ -165,7 +169,7 @@ function matchPosts(n, posts) {
     if (byUsed.some((u) => pt === u || (u.length >= 6 && pt.includes(u)))) return true;
     if (!keys.length) return false;
     // 책 제목으로 맞추기는 책 노트만(수업 노트 «인생»이 책 «인생» 인스타에 붙지 않게)
-    if (n.src !== '책') return p.k === '블로그' && keys.some((k) => k.length >= 6 && pt.includes(k));
+    if (!isBook(n)) return p.k === '블로그' && keys.some((k) => k.length >= 6 && pt.includes(k));
     if (p.k === '인스타') {
       if (p.t && keys.includes(pt)) return true;
       return (p.tags || []).some((t) => t.length >= 4 && keys.includes(t));
@@ -252,10 +256,10 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
     // 임시저장 제목의 『책 제목』이 노트 이름(«블로그 초안 - 카스트»처럼 앞머리를 뗀 것)과 같아도 같은 글로 본다.
     // 수업 노트 «인생»이 책 『인생』 글에 붙지 않게 책 노트·이름에 «초안»이 든 노트만.
     const br = [...(d.title || '').matchAll(/[『《]([^』》]{1,40})[』》]/g)].map((m) => norm(m[1])).filter((b) => b.length >= 2);
-    const brMatch = (n) => br.length && (n.src === '책' || /초안/.test(n.name)) && [norm(bare(n.name)), norm(bare(n.title))].some((k) => br.includes(k));
+    const brMatch = (n) => br.length && (isBook(n) || /초안/.test(n.name)) && [norm(bare(n.name)), norm(bare(n.title))].some((k) => br.includes(k));
     const cands = [...notes.values()].filter((n) => brMatch(n) || matchPosts(n, pseudo).length);
     // 이미 서랍에 있는 노트 > 책 노트 > 나머지
-    cands.sort((a, b) => (chosen.has(b.name) - chosen.has(a.name)) || ((b.src === '책') - (a.src === '책')));
+    cands.sort((a, b) => (chosen.has(b.name) - chosen.has(a.name)) || (isBook(b) - isBook(a)));
     const n = cands.find((c) => !draftByNote.has(c.name));
     if (n) { draftByNote.set(n.name, d); add(n); } else loose.push(d);
   }
@@ -283,7 +287,7 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
       id: n.rel,
       name: n.name,
       // 임시저장본이 있으면 실제 글 제목을 보인다(노트 이름은 상세 창 «부탁할 말»에 남음)
-      title: draft ? draft.title : n.src === '책' && n.title !== n.name ? n.title : n.name,
+      title: draft ? draft.title : isBook(n) && n.title !== n.name ? n.title : n.name,
       author: n.author || undefined,
       file: n.rel,
       src: n.src,
@@ -457,6 +461,6 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
   fs.writeFileSync(OUT, JSON.stringify(out));
   const cnt = STAGES.map((s) => s + ' ' + items.filter((i) => i.stage === s).length).join(' · ');
   // 내용은 출력하지 않고 숫자만
-  console.log(`기준일 ${TODAY} · 서랍 ${items.length}개(${cnt}) · 깊숙이 ${deep.length} · 최근 글 ${recentPosts.length} · 블로그 ${blog.length}/인스타 ${insta.length} · 임시저장 ${td.drafts.length}(노트와 이어짐 ${draftByNote.size}) · 메일 글감 ${items.filter((i) => i.src === '메일').length} · 먼저 쓸 글 ${next.length}(이어짐 ${next.filter((x) => x.id).length}) · 검색 철 ${seoDays.length}개 날·트렌드 ${trends.length}개 → 맞은 카드 ${items.filter((i) => i.seo).length}`);
+  console.log(`기준일 ${TODAY} · 서랍 ${items.length}개(${cnt}) · 깊숙이 ${deep.length} · 최근 글 ${recentPosts.length} · 블로그 ${blog.length}/인스타 ${insta.length} · 임시저장 ${td.drafts.length}(노트와 이어짐 ${draftByNote.size}) · 메일 글감 ${items.filter((i) => i.src === '메일').length} · 책장 글감 ${items.filter((i) => i.src === '책장').length} · 먼저 쓸 글 ${next.length}(이어짐 ${next.filter((x) => x.id).length}) · 검색 철 ${seoDays.length}개 날·트렌드 ${trends.length}개 → 맞은 카드 ${items.filter((i) => i.seo).length}`);
   console.log('→ ' + path.relative(process.cwd(), OUT));
 })().catch((e) => { console.error(e.message); process.exit(1); });
