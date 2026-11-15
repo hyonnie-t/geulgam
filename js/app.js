@@ -159,6 +159,8 @@ function renderFilters() {
 function card(it, n) {
   const tags = [`<span class="tag">${SRC_EMOJI[it.src] || ''} ${esc(it.src)}</span>`, ...it.where.map((w) => `<span class="tag where">${esc(w)}</span>`)];
   if (data.week.ids.includes(it.id)) tags.unshift('<span class="tag thisweek">⭐ 이번 주</span>');
+  // 검색 철(build.js가 seo로 넣음): 해마다 검색이 몰리는 날이 가깝거나 오늘 많이 찾는 말이 제목에 있음
+  if (it.seo && it.stage !== '발행') tags.unshift(`<span class="tag seo">🔎 ${it.seo.trend ? '지금 많이 찾음' : `${esc(it.seo.label)} D-${it.seo.left}`}</span>`);
   if (it.next && it.stage !== '발행') tags.unshift(`<span class="tag nextup">👉 먼저 ${it.next}</span>`);
   if (it.draft && it.src !== '임시저장') tags.unshift('<span class="tag tdraft">✍️ 임시저장</span>');
   if (it.stage === '글감' && it.age >= OLD) tags.push(`<span class="tag old${it.age >= VERY_OLD ? ' very' : ''}">묵은 지 ${it.age}일</span>`);
@@ -249,7 +251,7 @@ function openItem(id) {
   ].join('')}</dl>` : '';
   const before = it.stage !== '발행' && it.pub.length ? `<ul>${it.pub.map((p) => `<li>${fmtDay(p.d)} ${esc(p.k)}에 쓴 적 있음 — <a href="${esc(p.u)}" target="_blank" rel="noopener">${esc(p.t || '열기')}</a></li>`).join('')}</ul>` : '';
   $('#d-body').innerHTML = [
-    sec('왜 여기 있나', `<p>${esc(it.stageWhy || '')}${it.since ? ` · ${fmtDay(it.since)}부터` : ''}${next ? `<br><span class="hint">다음: ${next}</span>` : ''}</p>`),
+    sec('왜 여기 있나', `<p>${esc(it.stageWhy || '')}${it.since ? ` · ${fmtDay(it.since)}부터` : ''}${it.seo && it.stage !== '발행' ? `<br>🔎 ${it.seo.trend ? `오늘 많이 찾는 말 «${esc(it.seo.term)}»` : `«${esc(it.seo.label)}» 검색이 느는 때 · ${fmtDay(it.seo.d)}까지 ${it.seo.left}일`}` : ''}${next ? `<br><span class="hint">다음: ${next}</span>` : ''}</p>`),
     sec('티스토리 임시저장', draftSec),
     sec('뽑힌 이유', it.picks.filter((p) => p.why).map((p) => `<p class="d-quote">${esc(p.why)}<br><span class="hint">${fmtDay(p.d)} 이번 주 글감</span></p>`).join('')),
     sec(it.file ? '노트 첫 줄' : '글 첫 줄', it.head ? `<p class="hint">${esc(it.head)}${it.len && it.file ? ` (본문 ${it.len}자)` : ''}</p>` : ''),
