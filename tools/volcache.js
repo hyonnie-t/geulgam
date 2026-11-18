@@ -27,7 +27,7 @@ function attach(items, cache) {
     if (!kws.length) { if (all.length && all.every((x) => x.none)) it.volNone = true; continue; } // 네이버에 결과가 없는 검색어
     const total = Math.max(...kws.map((x) => (x.pc || 0) + (x.mo || 0)));
     it.vol = {
-      kws: kws.map((x) => ({ k: x.k, pc: x.pc, mo: x.mo, comp: x.comp, low: x.low || undefined })),
+      kws: kws.map((x) => ({ k: x.k, pc: x.pc, mo: x.mo, comp: x.comp, low: x.low || undefined, rel: x.rel && x.rel.length ? x.rel : undefined })), // rel = 같이 찾는 말(상세 창)
       total, low: kws.every((x) => x.low) || undefined, at: kws.map((x) => x.at).sort().pop(),
     };
     it.vol.g = grade(it.vol.kws, it.kwFit);
@@ -50,6 +50,21 @@ function gradeOne(x) {
 }
 function grade(kws, fit) {
   const best = kws.map(gradeOne).sort((a, b) => LV[b.lv] - LV[a.lv] || b.t - a.t)[0];
-  return fit === '약함' ? { ...best, lv: '하', big: undefined, weak: true } : best;
+  const g = fit === '약함' ? { ...best, lv: '하', big: undefined, weak: true } : best;
+  // r = 줄 세울 때 쓰는 값 하나(먼저 쓸 글·앱 «검색 기대순»이 같은 순서를 쓰게): 상 4 > 중 3 > 큰 말 2 > 하 1 > 맞음 약함 0
+  g.r = g.weak ? 0 : g.lv === '상' ? 4 : g.lv === '중' ? (g.big ? 2 : 3) : 1;
+  return g;
 }
-module.exports = { FILE, FRESH_DAYS, parseKw, load, save, isFresh, attach, dayDiff, grade };
+
+// 노트 없는 임시저장 글의 검색어 파일(볼트 «5-개인/글 초안/임시저장 검색어.md»): `- 제목 일부 = 키1, 키2` (+ 끝에 «(약함)»)
+const LOOSE_REL = path.join('5-개인', '글 초안', '임시저장 검색어.md');
+function parseLooseLine(line) {
+  const m = String(line).match(/^\s*-\s+(.+?)\s+=\s+(.+?)\s*$/);
+  if (!m) return null;
+  const weak = /\(약함\)\s*$/;
+  return { key: m[1].trim(), kw: parseKw(m[2].replace(weak, '')), fit: weak.test(m[2]) ? '약함' : '' };
+}
+function readLooseKw(vault) {
+  try { return fs.readFileSync(path.join(vault, LOOSE_REL), 'utf8').split(/\r?\n/).map(parseLooseLine).filter((x) => x && x.key.length >= 2); } catch (e) { return []; }
+}
+module.exports = { FILE, FRESH_DAYS, parseKw, load, save, isFresh, attach, dayDiff, grade, LOOSE_REL, parseLooseLine, readLooseKw };

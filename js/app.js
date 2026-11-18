@@ -14,6 +14,17 @@ const draftLine = (d) => [`${Number(d.chars || 0).toLocaleString('ko-KR')}자`, 
 // 네이버 월 검색수(검색광고 API, build.js가 캐시를 vol로 붙임): 1만 넘으면 «3.1만», «< 10»은 «10 미만»
 const fmtN = (n) => (n >= 10000 ? `${(n / 10000).toFixed(1).replace(/\.0$/, '')}만` : Number(n).toLocaleString('ko-KR'));
 const volText = (v) => (v.low ? '10 미만' : fmtN(v.total));
+// 검색 기대(build.js의 volcache.grade가 vol.g로 붙임 — 화면은 읽기만, 2026-11-18): 먼저 쓸 글 순서·카드 칩·«검색 기대순»·상세 창이 같은 등급을 쓴다. 옛 자료엔 g가 없다.
+const gLabel = (g) => (!g ? '' : g.weak ? '맞음 약함' : g.big ? '큰 말' : `기대 ${g.lv}`);
+const gWhy = (g) => (g.weak ? '찾는 사람은 있어도 이 글이 그 답은 아니에요(생각 글). 검색보다 다른 글의 «함께 읽어 볼 글»에서 이어 읽히게 해요.'
+  : g.big ? `«${g.k}»는 찾는 사람이 많지만 큰 말이라 혼자서는 밀려요. 구체적인 말과 묶어 제목·소제목에 써요.`
+  : g.lv === '상' ? `«${g.k}»는 찾는 사람이 꾸준하고 작은 블로그도 노려볼 크기예요.`
+  : g.lv === '중' ? `«${g.k}»는 찾는 사람이 조금 있어요.`
+  : `«${g.k}»는 거의 안 찾는 말이에요. 검색어를 바꿔 다시 재 볼 만해요.`);
+// 칩 숫자는 등급을 준 검색어의 것(검색어가 둘일 때 큰 숫자와 등급이 서로 다른 말이면 헷갈린다)
+const volChip = (v) => `월 ${v.low ? '10 미만' : fmtN(v.g ? v.g.t : v.total)}${v.g ? ` · ${gLabel(v.g)}` : ''}`;
+// 줄 세우는 값: 등급(g.r) 먼저, 같은 등급은 많이 찾는 순. 옛 자료(g 없음)는 검색수만, 안 잰 카드는 맨 뒤
+const volRank = (i) => (i.vol ? [i.vol.g ? i.vol.g.r : 1, i.vol.total] : [-1, -1]);
 const OLD = 21, VERY_OLD = 42; // 묵은 글감 기준(일)
 const VAULT = '효니노트';
 const CACHE = 'geulgam-cache';
@@ -120,7 +131,7 @@ function renderNext() {
       : it && it.draft && !x.auto ? draftLine(it.draft) : x.auto ? '🤖 자동으로 골랐어요' : x.why;
     const title = x.pub && !it ? x.pub.t : it ? it.title : x.key;
     const inner = `<span class="n" aria-hidden="true">${done ? '✓' : x.n}</span>
-      <span class="txt"><span class="t">${esc(title)}</span>${x.why && !done ? `<span class="why">${esc(x.why)}</span>` : ''}${sub && sub !== x.why ? `<span class="sub">${esc(sub)}</span>` : ''}${it && it.vol && !done ? `<span class="sub">📈 월 ${esc(volText(it.vol))}</span>` : ''}</span>
+      <span class="txt"><span class="t">${esc(title)}</span>${x.why && !done ? `<span class="why">${esc(x.why)}</span>` : ''}${sub && sub !== x.why ? `<span class="sub">${esc(sub)}</span>` : ''}${it && it.vol && !done ? `<span class="sub">${x.why && x.why.startsWith('📈') ? '' : '📈 '}${esc(volChip(it.vol))}</span>` : ''}</span>
       ${done ? '<span class="st">✅<span class="vh"> 다 냄</span></span>' : ''}`;
     if (it) return `<li><button type="button" class="next-card${done ? ' done' : ''}" data-id="${esc(it.id)}">${inner}</button></li>`;
     // 카드는 없지만 이미 나간 글: 그 글로 바로 간다
@@ -161,7 +172,7 @@ function renderFilters() {
   const hasVol = data.items.some((i) => i.vol && i.stage !== '발행'); // 발행 칸 카드는 칩이 없어서 셈에서 뺀다
   if (!hasVol) view.sort = '기본';
   $('#f-sort').hidden = !hasVol;
-  $('#f-sort').innerHTML = '<legend class="vh">카드 순서</legend>' + [['기본', '기본 순서'], ['검색량', '📈 검색량순']].map(([v, l]) => chip('sort', v, view.sort, l)).join('');
+  $('#f-sort').innerHTML = '<legend class="vh">카드 순서</legend>' + [['기본', '기본 순서'], ['검색량', '📈 검색 기대순']].map(([v, l]) => chip('sort', v, view.sort, l)).join('');
   for (const f of ['#f-src', '#f-where', '#f-sort']) $(f).onchange = (e) => { view[e.target.name] = e.target.value; saveView(); renderBoard(); };
 }
 
@@ -170,7 +181,7 @@ function card(it, n) {
   if (data.week.ids.includes(it.id)) tags.unshift('<span class="tag thisweek">⭐ 이번 주</span>');
   // 검색 철(build.js가 seo로 넣음): 해마다 검색이 몰리는 날이 가깝거나 오늘 많이 찾는 말이 제목에 있음
   if (it.seo && it.stage !== '발행') tags.unshift(`<span class="tag seo">🔎 ${it.seo.trend ? '지금 많이 찾음' : `${esc(it.seo.label)} D-${it.seo.left}`}</span>`);
-  if (it.vol && it.stage !== '발행') tags.push(`<span class="tag vol" title="네이버 월 검색수(검색광고 API)">📈 월 ${esc(volText(it.vol))}</span>`);
+  if (it.vol && it.stage !== '발행') tags.push(`<span class="tag vol${it.vol.g && it.vol.g.weak ? ' weak' : ''}" title="네이버 월 검색수(검색광고 API)와 검색 기대">📈 ${esc(volChip(it.vol))}</span>`);
   if (it.next && it.stage !== '발행') tags.unshift(`<span class="tag nextup">👉 먼저 ${it.next}</span>`);
   if (it.draft && it.src !== '임시저장') tags.unshift('<span class="tag tdraft">✍️ 임시저장</span>');
   if (it.stage === '글감' && it.age >= OLD) tags.push(`<span class="tag old${it.age >= VERY_OLD ? ' very' : ''}">묵은 지 ${it.age}일</span>`);
@@ -198,8 +209,8 @@ function renderBoard() {
   $('#stage-tabs').onchange = (e) => { view.stage = e.target.value; saveView(); for (const c of document.querySelectorAll('.col')) c.classList.toggle('on', c.dataset.stage === view.stage); };
   $('#board').innerHTML = STAGES.map((s) => {
     let list = items.filter((i) => i.stage === s.key);
-    // 검색량순: 큰 순서(같으면 원래 순서 그대로), 아직 안 잰 카드는 맨 뒤
-    if (view.sort === '검색량') list = list.map((i, n) => ({ i, n })).sort((a, b) => ((b.i.vol?.total ?? -1) - (a.i.vol?.total ?? -1)) || a.n - b.n).map((x) => x.i);
+    // 검색 기대순(저장 값은 옛 이름 '검색량' 그대로): 먼저 쓸 글과 같은 등급 순 → 많이 찾는 순(같으면 원래 순서), 아직 안 잰 카드는 맨 뒤
+    if (view.sort === '검색량') list = list.map((i, n) => ({ i, n, r: volRank(i) })).sort((a, b) => (b.r[0] - a.r[0]) || (b.r[1] - a.r[1]) || a.n - b.n).map((x) => x.i);
     return `<section class="col${view.stage === s.key ? ' on' : ''}" data-stage="${s.key}" aria-label="${s.label} 칸">
       <h3 class="col-head">${s.emoji} ${s.label} <span class="count">${list.length}</span></h3>
       ${list.length ? `<ul class="col-list">${list.map(card).join('')}</ul>` : `<p class="col-empty">${esc(s.empty)}</p>`}
@@ -245,13 +256,18 @@ function volSec(it) {
   if (!v) {
     if (it.volNone) return `<p class="hint">검색어 «${esc((it.kw || []).join(', '))}»는 네이버에서 월 검색수가 안 나왔어요. 더 흔한 말로 바꿔 달라고 Claude에게 부탁해 보세요.</p>`;
     if (it.kw && it.kw.length) return `<p class="hint">검색어 «${esc(it.kw.join(', '))}»의 월 검색수는 아직 안 쟀어요. 월요일 점검 때 들어와요.</p>`;
-    if (!it.file) return '';
-    return `<p class="hint">아직 검색어가 없어요. Claude에게 정해 달라고 하면 노트에 <code>검색어:</code> 한 줄이 생겨요.</p>
-      <div class="d-actions"><button type="button" class="ghost" data-copy="${esc(`[[${it.name}]]에 블로그 검색어 1~2개 정해서 검색어: 줄 넣고 월 검색수 조회해줘`)}"><lucian-copy state="idle" size="20" tone="line"></lucian-copy> 검색어 정해 달라는 말 복사</button></div>`;
+    if (!it.file && it.title === '(제목 없음)') return '';
+    // 노트 없는 임시저장 글도 정할 수 있다(볼트 «임시저장 검색어» 노트에 들어감)
+    const ask = it.file ? `[[${it.name}]]에 블로그 검색어 1~2개 정해서 검색어: 줄 넣고(생각 글이면 검색맞음: 약함도) 월 검색수 조회해줘`
+      : `임시저장 글 «${it.title}»에 블로그 검색어 1~2개 정해서 넣고 월 검색수 조회해줘`;
+    return `<p class="hint">아직 검색어가 없어요. Claude에게 정해 달라고 하면 ${it.file ? '노트에 <code>검색어:</code> 한 줄이 생겨요' : '볼트 «임시저장 검색어» 노트에 한 줄이 생겨요'}.</p>
+      <div class="d-actions"><button type="button" class="ghost" data-copy="${esc(ask)}"><lucian-copy state="idle" size="20" tone="line"></lucian-copy> 검색어 정해 달라는 말 복사</button></div>`;
   }
   const n = (x) => (x === 5 ? '10 미만' : fmtN(x)); // API가 «< 10»을 주면 searchvol.js가 5로 저장(실제 5는 오지 않음)
-  return `<div class="d-vol">${v.kws.map((k) => `<div class="row"><span class="k">${esc(k.k)}</span>
-    <span class="n">PC <b>${n(k.pc)}</b> · 모바일 <b>${n(k.mo)}</b>${k.comp ? ` · 경쟁 <b>${esc(k.comp)}</b>` : ''}</span></div>`).join('')}</div>
+  const rel = (k) => (arr(k.rel).length ? `<span class="rel">같이 찾는 말: ${arr(k.rel).map((r) => esc(r.k)).join(' · ')}</span>` : '');
+  return `${v.g ? `<p class="d-grade"><b>검색 기대 ${esc(v.g.weak ? '— 맞음 약함' : v.g.big ? '중 — 큰 말' : v.g.lv)}</b> ${esc(gWhy(v.g))}</p>` : ''}
+    <div class="d-vol">${v.kws.map((k) => `<div class="row"><span class="k">${esc(k.k)}</span>
+    <span class="n">PC <b>${n(k.pc)}</b> · 모바일 <b>${n(k.mo)}</b>${k.comp ? ` · 광고 경쟁 <b>${esc(k.comp)}</b>` : ''}</span>${rel(k)}</div>`).join('')}</div>
     <p class="hint">네이버 검색광고 API(키워드도구) 값 · ${esc(fmtDay(v.at))} 조회 · 한 달 기준이에요. 고를 때 참고만 하고, 글에 숫자를 그대로 싣지 않아요.</p>`;
 }
 function openItem(id) {
