@@ -11,6 +11,9 @@ const SRC_EMOJI = { 책: '📚', 수업: '🏫', 대학원: '🎓', 오데이: '
 const TISTORY_WRITE = 'https://0hyonnie.tistory.com/manage/newpost';
 // 임시저장본 한 줄 요약: «3,467자 · ★ 채울 곳 3 · ☆ 확인 5»
 const draftLine = (d) => [`${Number(d.chars || 0).toLocaleString('ko-KR')}자`, d.fill ? `★ 채울 곳 ${d.fill}` : '', d.guess ? `☆ 확인 ${d.guess}` : '', d.updated ? `${fmtDay(d.updated)} 고침` : ''].filter(Boolean).join(' · ');
+// 네이버 월 검색수(검색광고 API, build.js가 캐시를 vol로 붙임): 1만 넘으면 «3.1만», «< 10»은 «10 미만»
+const fmtN = (n) => (n >= 10000 ? `${(n / 10000).toFixed(1).replace(/\.0$/, '')}만` : Number(n).toLocaleString('ko-KR'));
+const volText = (v) => (v.low ? '10 미만' : fmtN(v.total));
 const OLD = 21, VERY_OLD = 42; // 묵은 글감 기준(일)
 const VAULT = '효니노트';
 const CACHE = 'geulgam-cache';
@@ -23,7 +26,7 @@ const params = new URLSearchParams(location.search);
 const isLocal = ['localhost', '127.0.0.1'].includes(location.hostname);
 
 let data = null;
-const view = { src: '전체', where: '전체', stage: '글감' };
+const view = { src: '전체', where: '전체', stage: '글감', sort: '기본' };
 try { Object.assign(view, JSON.parse(localStorage.getItem('geulgam-view') || '{}')); } catch (e) {}
 const saveView = () => { try { localStorage.setItem('geulgam-view', JSON.stringify(view)); } catch (e) {} };
 
@@ -93,14 +96,15 @@ function stamp(html) { $('#stamp').innerHTML = html; }
 function show(d, note) {
   data = {
     ...d,
-    items: arr(d.items).map((i) => ({ ...i, where: arr(i.where), picks: arr(i.picks), used: arr(i.used), pub: arr(i.pub) })),
+    items: arr(d.items).map((i) => ({ ...i, where: arr(i.where), picks: arr(i.picks), used: arr(i.used), pub: arr(i.pub), kw: arr(i.kw), vol: i.vol ? { ...i.vol, kws: arr(i.vol.kws) } : undefined })),
     deep: arr(d.deep), recent: arr(d.recent), week: { ...(d.week || {}), ids: arr(d.week && d.week.ids) },
   };
   $('#gate').hidden = true; $('#content').hidden = false;
   const at = new Date(d.at);
   const when = isNaN(at) ? '' : `${at.getMonth() + 1}월 ${at.getDate()}일 ${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
   const st = d.stats || {};
-  stamp(`볼트 읽은 때 <b>${esc(when)}</b>${note ? ' · ' + esc(note) : ''} · 쓰인 노트 <b>${st.usedNotes ?? 0}</b>개 / 본문 있는 노트 ${st.withBody ?? '?'}개`);
+  stamp(`볼트 읽은 때 <b>${esc(when)}</b>${note ? ' · ' + esc(note) : ''} · 쓰인 노트 <b>${st.usedNotes ?? 0}</b>개 / 본문 있는 노트 ${st.withBody ?? '?'}개${d.volAt ? ` · 월 검색수 <b>${esc(fmtDay(d.volAt))}</b> 기준(네이버 검색광고 API)` : ''}`);
+  $('#vol-note').hidden = !data.items.some((i) => i.vol);
   renderNext(); renderWeek(); renderFilters(); renderBoard(); renderDeep(); renderRecent();
 }
 
@@ -116,7 +120,7 @@ function renderNext() {
       : it && it.draft && !x.auto ? draftLine(it.draft) : x.auto ? '🤖 자동으로 골랐어요' : x.why;
     const title = x.pub && !it ? x.pub.t : it ? it.title : x.key;
     const inner = `<span class="n" aria-hidden="true">${done ? '✓' : x.n}</span>
-      <span class="txt"><span class="t">${esc(title)}</span>${x.why && !done ? `<span class="why">${esc(x.why)}</span>` : ''}${sub && sub !== x.why ? `<span class="sub">${esc(sub)}</span>` : ''}</span>
+      <span class="txt"><span class="t">${esc(title)}</span>${x.why && !done ? `<span class="why">${esc(x.why)}</span>` : ''}${sub && sub !== x.why ? `<span class="sub">${esc(sub)}</span>` : ''}${it && it.vol && !done ? `<span class="sub">📈 월 ${esc(volText(it.vol))}</span>` : ''}</span>
       ${done ? '<span class="st">✅<span class="vh"> 다 냄</span></span>' : ''}`;
     if (it) return `<li><button type="button" class="next-card${done ? ' done' : ''}" data-id="${esc(it.id)}">${inner}</button></li>`;
     // 카드는 없지만 이미 나간 글: 그 글로 바로 간다
@@ -153,7 +157,12 @@ function renderFilters() {
   const chip = (name, val, cur, label, count) => `<label><input type="radio" name="${name}" value="${esc(val)}"${val === cur ? ' checked' : ''}><span>${esc(label)}${count != null ? `<span class="count">${count}</span>` : ''}</span></label>`;
   $('#f-src').innerHTML = '<legend class="vh">어디서 온 글감</legend>' + srcs.map((s) => chip('src', s, view.src, s === '전체' ? '전체' : `${SRC_EMOJI[s] || ''} ${s}`, s === '전체' ? data.items.length : data.items.filter((i) => i.src === s).length)).join('');
   $('#f-where').innerHTML = '<legend class="vh">어디에 쓸 글</legend>' + ['전체', '블로그', '인스타'].map((w) => chip('where', w, view.where, w === '전체' ? '쓸 곳 전부' : w)).join('');
-  for (const f of ['#f-src', '#f-where']) $(f).onchange = (e) => { view[e.target.name] = e.target.value; saveView(); renderBoard(); };
+  // 정렬: 월 검색수가 붙은 카드가 하나라도 있을 때만 보인다
+  const hasVol = data.items.some((i) => i.vol && i.stage !== '발행'); // 발행 칸 카드는 칩이 없어서 셈에서 뺀다
+  if (!hasVol) view.sort = '기본';
+  $('#f-sort').hidden = !hasVol;
+  $('#f-sort').innerHTML = '<legend class="vh">카드 순서</legend>' + [['기본', '기본 순서'], ['검색량', '📈 검색량순']].map(([v, l]) => chip('sort', v, view.sort, l)).join('');
+  for (const f of ['#f-src', '#f-where', '#f-sort']) $(f).onchange = (e) => { view[e.target.name] = e.target.value; saveView(); renderBoard(); };
 }
 
 function card(it, n) {
@@ -161,6 +170,7 @@ function card(it, n) {
   if (data.week.ids.includes(it.id)) tags.unshift('<span class="tag thisweek">⭐ 이번 주</span>');
   // 검색 철(build.js가 seo로 넣음): 해마다 검색이 몰리는 날이 가깝거나 오늘 많이 찾는 말이 제목에 있음
   if (it.seo && it.stage !== '발행') tags.unshift(`<span class="tag seo">🔎 ${it.seo.trend ? '지금 많이 찾음' : `${esc(it.seo.label)} D-${it.seo.left}`}</span>`);
+  if (it.vol && it.stage !== '발행') tags.push(`<span class="tag vol" title="네이버 월 검색수(검색광고 API)">📈 월 ${esc(volText(it.vol))}</span>`);
   if (it.next && it.stage !== '발행') tags.unshift(`<span class="tag nextup">👉 먼저 ${it.next}</span>`);
   if (it.draft && it.src !== '임시저장') tags.unshift('<span class="tag tdraft">✍️ 임시저장</span>');
   if (it.stage === '글감' && it.age >= OLD) tags.push(`<span class="tag old${it.age >= VERY_OLD ? ' very' : ''}">묵은 지 ${it.age}일</span>`);
@@ -187,7 +197,9 @@ function renderBoard() {
   $('#stage-tabs').innerHTML = '<legend class="vh">보는 칸</legend>' + STAGES.map((s) => `<label data-stage="${s.key}"><input type="radio" name="stage" value="${s.key}"${view.stage === s.key ? ' checked' : ''}><span>${s.emoji} ${s.label} <span class="count">${counts[s.key]}</span></span></label>`).join('');
   $('#stage-tabs').onchange = (e) => { view.stage = e.target.value; saveView(); for (const c of document.querySelectorAll('.col')) c.classList.toggle('on', c.dataset.stage === view.stage); };
   $('#board').innerHTML = STAGES.map((s) => {
-    const list = items.filter((i) => i.stage === s.key);
+    let list = items.filter((i) => i.stage === s.key);
+    // 검색량순: 큰 순서(같으면 원래 순서 그대로), 아직 안 잰 카드는 맨 뒤
+    if (view.sort === '검색량') list = list.map((i, n) => ({ i, n })).sort((a, b) => ((b.i.vol?.total ?? -1) - (a.i.vol?.total ?? -1)) || a.n - b.n).map((x) => x.i);
     return `<section class="col${view.stage === s.key ? ' on' : ''}" data-stage="${s.key}" aria-label="${s.label} 칸">
       <h3 class="col-head">${s.emoji} ${s.label} <span class="count">${list.length}</span></h3>
       ${list.length ? `<ul class="col-list">${list.map(card).join('')}</ul>` : `<p class="col-empty">${esc(s.empty)}</p>`}
@@ -226,6 +238,22 @@ function askFor(it) {
   if (it.src === '책') return `[[${it.name}]]로 ${it.where.includes('인스타') ? '책 인스타 글' : '티스토리 서평'} 초안 같이 쓰자`;
   return `[[${it.name}]]로 티스토리 글 초안 같이 쓰자`;
 }
+// 상세 창 «네이버 월 검색수»: 검색어별 PC·모바일·경쟁 + API 표시(약관). 검색어가 없으면 Claude에게 정해 달라는 말만 복사(앱은 입력 없음)
+function volSec(it) {
+  if (it.stage === '발행') return '';
+  const v = it.vol;
+  if (!v) {
+    if (it.volNone) return `<p class="hint">검색어 «${esc((it.kw || []).join(', '))}»는 네이버에서 월 검색수가 안 나왔어요. 더 흔한 말로 바꿔 달라고 Claude에게 부탁해 보세요.</p>`;
+    if (it.kw && it.kw.length) return `<p class="hint">검색어 «${esc(it.kw.join(', '))}»의 월 검색수는 아직 안 쟀어요. 월요일 점검 때 들어와요.</p>`;
+    if (!it.file) return '';
+    return `<p class="hint">아직 검색어가 없어요. Claude에게 정해 달라고 하면 노트에 <code>검색어:</code> 한 줄이 생겨요.</p>
+      <div class="d-actions"><button type="button" class="ghost" data-copy="${esc(`[[${it.name}]]에 블로그 검색어 1~2개 정해서 검색어: 줄 넣고 월 검색수 조회해줘`)}"><lucian-copy state="idle" size="20" tone="line"></lucian-copy> 검색어 정해 달라는 말 복사</button></div>`;
+  }
+  const n = (x) => (x === 5 ? '10 미만' : fmtN(x)); // API가 «< 10»을 주면 searchvol.js가 5로 저장(실제 5는 오지 않음)
+  return `<div class="d-vol">${v.kws.map((k) => `<div class="row"><span class="k">${esc(k.k)}</span>
+    <span class="n">PC <b>${n(k.pc)}</b> · 모바일 <b>${n(k.mo)}</b>${k.comp ? ` · 경쟁 <b>${esc(k.comp)}</b>` : ''}</span></div>`).join('')}</div>
+    <p class="hint">네이버 검색광고 API(키워드도구) 값 · ${esc(fmtDay(v.at))} 조회 · 한 달 기준이에요. 고를 때 참고만 하고, 글에 숫자를 그대로 싣지 않아요.</p>`;
+}
 function openItem(id) {
   const it = data.items.find((i) => i.id === id);
   if (!it) return;
@@ -253,6 +281,7 @@ function openItem(id) {
   $('#d-body').innerHTML = [
     sec('왜 여기 있나', `<p>${esc(it.stageWhy || '')}${it.since ? ` · ${fmtDay(it.since)}부터` : ''}${it.seo && it.stage !== '발행' ? `<br>🔎 ${it.seo.trend ? `오늘 많이 찾는 말 «${esc(it.seo.term)}»` : `«${esc(it.seo.label)}» 검색이 느는 때 · ${fmtDay(it.seo.d)}까지 ${it.seo.left}일`}` : ''}${next ? `<br><span class="hint">다음: ${next}</span>` : ''}</p>`),
     sec('티스토리 임시저장', draftSec),
+    sec('네이버 월 검색수', volSec(it)),
     sec('뽑힌 이유', it.picks.filter((p) => p.why).map((p) => `<p class="d-quote">${esc(p.why)}<br><span class="hint">${fmtDay(p.d)} 이번 주 글감</span></p>`).join('')),
     sec(it.file ? '노트 첫 줄' : '글 첫 줄', it.head ? `<p class="hint">${esc(it.head)}${it.len && it.file ? ` (본문 ${it.len}자)` : ''}</p>` : ''),
     sec('나간 글', it.stage === '발행' ? `<ul>${it.pub.map((p) => `<li>${fmtDay(p.d)} ${esc(p.k)} — <a href="${esc(p.u)}" target="_blank" rel="noopener">${esc(p.t || '열기')}</a></li>`).join('')}</ul>` : before),
