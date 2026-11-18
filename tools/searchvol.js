@@ -8,6 +8,8 @@
 //   node tools/searchvol.js --todo     «글감·초안» 카드 중 검색어가 아직 없는 노트 이름(Claude가 검색어를 정할 때)
 //   node tools/searchvol.js --set "노트이름=임진왜란,이순신"   그 노트 맨 위 속성에 `검색어: 임진왜란, 이순신` 한 줄(1~2개)
 //   node tools/searchvol.js --fit "노트이름=약함"   `검색맞음: 약함` 한 줄 — 찾는 사람이 바라는 답과 글이 다를 때(생각 글). 먼저 쓸 글 순서에서 안 올린다
+//   node tools/searchvol.js --show "노트이름"   그 카드의 검색어·검색 기대·같이 찾는 말(초안 쓸 때). 조회 안 함
+//   노트 없는 임시저장 글은 --set/--fit "제목 일부=…" 가 볼트 «5-개인/글 초안/임시저장 검색어.md»에 쓴다
 // 검색어는 노트 속성 `검색어:`(앱은 보기만 하고 입력이 없어서 Claude가 정해 노트에 쓴다).
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const vc = require('./volcache');
@@ -53,6 +55,12 @@ function setFit(spec) {
 // 노트 맨 위 속성에 `key: value` 한 줄을 쓴다(있으면 바꾸고, value가 비면 그 줄을 지운다)
 function writeProp(name, key, value) {
   const hits = findNote(name);
+  // 노트가 없으면 «노트 없는 임시저장 글»인지 본다(서랍 카드 제목에 그 말이 들어 있음) → 볼트 «임시저장 검색어.md»에 한 줄
+  if (!hits.length && fs.existsSync(DRAWER)) {
+    const n = (s) => String(s || '').replace(/\s+/g, '').toLowerCase();
+    const loose = JSON.parse(fs.readFileSync(DRAWER, 'utf8')).items.filter((i) => !i.file && i.stage !== '발행' && n(i.title).includes(n(name)));
+    if (loose.length === 1) return writeLoose(name, key, value);
+  }
   if (hits.length !== 1) { console.error(`노트 «${name}»를 ${hits.length}개 찾음 — 하나만 있어야 씁니다.`); process.exit(1); }
   const raw = fs.readFileSync(hits[0], 'utf8');
   const nl = raw.includes('\r\n') ? '\r\n' : '\n';
@@ -71,6 +79,37 @@ function writeProp(name, key, value) {
   }
   fs.writeFileSync(hits[0], bom + out);
   console.log(`«${name}» ← ${line || key + ' 줄 지움'} (다음에 node tools/build.js 와 node tools/searchvol.js --write)`);
+}
+// 노트 없는 임시저장 글: `- 제목 일부 = 키1, 키2 (약함)` 한 줄을 볼트 «5-개인/글 초안/임시저장 검색어.md»에 쓰거나 바꾼다
+function writeLoose(name, key, value) {
+  const file = path.join(VAULT, vc.LOOSE_REL);
+  const head = '---\ntype: 서랍순서\nkeywords: 글감 서랍, 임시저장, 검색어\n---\n# 임시저장 검색어\n\n노트 없이 티스토리 임시저장에만 있는 글의 검색어. Claude가 `searchvol.js --set`으로 쓴다(`- 제목 일부 = 검색어1, 검색어2`, 생각 글이면 끝에 «(약함)»).\n\n';
+  const raw = fs.existsSync(file) ? fs.readFileSync(file, 'utf8') : head;
+  const nl = raw.includes('\r\n') ? '\r\n' : '\n';
+  const lines = raw.split(/\r?\n/);
+  const at = lines.findIndex((l) => { const p = vc.parseLooseLine(l); return p && p.key === name; });
+  const old = at >= 0 ? vc.parseLooseLine(lines[at]) : { kw: [], fit: '' };
+  const kw = key === '검색어' ? vc.parseKw(value) : old.kw;
+  const fit = key === '검색맞음' ? value : old.fit;
+  if (!kw.length) { console.error(`임시저장 글 «${name}»에는 검색어부터 정해야 합니다(--set).`); process.exit(1); }
+  const line = `- ${name} = ${kw.join(', ')}${fit ? ' (약함)' : ''}`;
+  if (at >= 0) lines[at] = line; else { while (lines.length && !lines[lines.length - 1].trim()) lines.pop(); lines.push(line, ''); }
+  fs.mkdirSync(path.dirname(file), { recursive: true });
+  fs.writeFileSync(file, lines.join(nl));
+  console.log(`임시저장 글 «${name}» ← ${line.slice(2)} (다음에 node tools/build.js 와 node tools/searchvol.js --write)`);
+}
+// --show "노트이름 또는 제목 일부": 그 카드의 검색어·검색 기대·같이 찾는 말(초안 쓸 때 제목·소제목 후보, hyonnie-style 1단계). 조회하지 않고 서랍 자료만 읽는다.
+function show(name) {
+  const n = (s) => String(s || '').replace(/\s+/g, '').toLowerCase();
+  const hit = readDrawer().items.filter((i) => n(i.name) === n(name) || n(i.title).includes(n(name)));
+  if (!hit.length) return console.log(`«${name}» 카드를 서랍에서 못 찾음`);
+  for (const i of hit.slice(0, 3)) {
+    if (!i.vol) { console.log(`[${i.stage}] 검색어 ${i.kw && i.kw.length ? i.kw.join(', ') + '(아직 안 잼 또는 결과 없음)' : '없음 — --set으로 정하기'}`); continue; }
+    const g = i.vol.g || {};
+    console.log(`[${i.stage}] 검색 기대 ${g.weak ? '맞음 약함(검색으로 들어오길 기대하지 않는 글)' : g.lv + (g.big ? '(큰 말 — 구체적인 말과 묶기)' : '')} · 주 검색어 «${g.k}»`);
+    for (const k of i.vol.kws) console.log(`  ${k.k}: 월 ${k.low ? '10 미만' : (k.pc || 0) + (k.mo || 0)} · 경쟁 ${k.comp || '?'}${k.rel ? ' · 같이 찾는 말: ' + k.rel.map((r) => r.k).join(', ') : ''}`);
+  }
+  console.log('(숫자는 고를 때만 쓰고 글에 싣지 않는다)');
 }
 
 // ---------- 조회 ----------
@@ -95,6 +134,7 @@ const num = (v) => (typeof v === 'number' ? { n: v } : { n: 5, low: true });
 (async () => {
   if (opt('--set')) return setKw(opt('--set'));
   if (args.includes('--fit')) return setFit(opt('--fit', ''));
+  if (opt('--show')) return show(opt('--show'));
   const d = readDrawer();
   const cards = d.items.filter((i) => i.kw && i.kw.length);
   const cache = vc.load(CACHE);
@@ -102,6 +142,8 @@ const num = (v) => (typeof v === 'number' ? { n: v } : { n: 5, low: true });
     const need = d.items.filter((i) => !(i.kw && i.kw.length) && i.stage !== '발행' && i.file);
     console.log(`검색어가 없는 글감·초안 노트 ${need.length}개 (이름만):`);
     for (const i of need) console.log('- ' + i.name);
+    const loose = d.items.filter((i) => !(i.kw && i.kw.length) && i.stage !== '발행' && !i.file && i.title !== '(제목 없음)');
+    if (loose.length) { console.log(`노트 없는 임시저장 글 ${loose.length}개(--set "제목 일부=키1,키2" 로 쓰면 볼트 «임시저장 검색어.md»에 들어감):`); for (const i of loose) console.log('- ' + i.title); }
     return;
   }
   const want = [...new Set(cards.flatMap((i) => i.kw))];

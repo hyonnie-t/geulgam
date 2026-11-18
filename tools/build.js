@@ -310,12 +310,18 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
     });
   }
   // 노트와 이어지지 않은 임시저장본도 초안 칸에
+  // 노트 없는 임시저장 글의 검색어(2026-11-18 연결 점검): 노트가 없어 속성을 못 쓰니 볼트 «5-개인/글 초안/임시저장 검색어.md»의
+  // `- 제목 일부 = 키1, 키2` 줄(끝에 «(약함)»을 붙이면 검색맞음 약함)을 읽는다. searchvol.js --set/--fit이 이 파일에 쓴다.
+  const looseKw = volcache.readLooseKw(VAULT);
   for (const d of loose) {
     // 임시저장 파일이 묵어서 이미 발행된 글이 남아 있으면 뺀다(제목이 같은 공개 글이 있음)
     if (!d.untitled && blog.some((p) => norm(p.t) === norm(d.title))) continue;
     const since = d.created || '';
     const t = d.untitled ? '(제목 없음)' : d.title;
+    const lk = d.untitled ? null : looseKw.find((x) => norm(t).includes(norm(x.key)));
     items.push({
+      kw: lk && lk.kw.length ? lk.kw : undefined,
+      kwFit: lk && lk.kw.length && lk.fit ? lk.fit : undefined,
       id: 'tistory-draft-' + d.seq,
       name: t,
       title: t,

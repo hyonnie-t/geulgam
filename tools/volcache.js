@@ -27,7 +27,7 @@ function attach(items, cache) {
     if (!kws.length) { if (all.length && all.every((x) => x.none)) it.volNone = true; continue; } // 네이버에 결과가 없는 검색어
     const total = Math.max(...kws.map((x) => (x.pc || 0) + (x.mo || 0)));
     it.vol = {
-      kws: kws.map((x) => ({ k: x.k, pc: x.pc, mo: x.mo, comp: x.comp, low: x.low || undefined })),
+      kws: kws.map((x) => ({ k: x.k, pc: x.pc, mo: x.mo, comp: x.comp, low: x.low || undefined, rel: x.rel && x.rel.length ? x.rel : undefined })), // rel = 같이 찾는 말(상세 창)
       total, low: kws.every((x) => x.low) || undefined, at: kws.map((x) => x.at).sort().pop(),
     };
     it.vol.g = grade(it.vol.kws, it.kwFit);
@@ -40,7 +40,6 @@ function attach(items, cache) {
 // 검색어마다: 30 미만 «하» · 30~99 «중» · 100~2,999 «상» · 3,000 이상 «중»(big: 찾는 사람은 많지만 큰 말). 카드 등급은 검색어 중 가장 좋은 것.
 // 처음엔 300~9,999를 «상»으로 잡았다가 낮췄다: 지금까지 실제 검색 유입 5번이 모두 작은 틈새 말(역사 게임 수업 등)이었고, 제미나이 검토도 같은 지적.
 // 노트에 `검색맞음: 약함`이 있으면(생각 글 — 찾는 사람이 바라는 답과 글이 다름) 숫자와 상관없이 «하».
-const LV = { 상: 2, 중: 1, 하: 0 };
 function gradeOne(x) {
   const t = (x.pc || 0) + (x.mo || 0);
   if (x.low || t < 30) return { lv: '하', k: x.k, t };
@@ -49,7 +48,24 @@ function gradeOne(x) {
   return { lv: '중', k: x.k, t, big: true };
 }
 function grade(kws, fit) {
-  const best = kws.map(gradeOne).sort((a, b) => LV[b.lv] - LV[a.lv] || b.t - a.t)[0];
-  return fit === '약함' ? { ...best, lv: '하', big: undefined, weak: true } : best;
+  // r = 줄 세울 때 쓰는 값 하나(먼저 쓸 글·앱 «검색 기대순»이 같은 순서를 쓰게): 상 4 > 중 3 > 큰 말 2 > 하 1 > 맞음 약함 0
+  const rOf = (g) => (g.lv === '상' ? 4 : g.lv === '중' ? (g.big ? 2 : 3) : 1);
+  // 검색어가 둘이면 r이 높은 것, 같으면 많이 찾는 것(같은 «중»에서 큰 말이 작은 말을 이기지 않게 — 검토 지적)
+  const best = kws.map(gradeOne).sort((a, b) => rOf(b) - rOf(a) || b.t - a.t)[0];
+  const g = fit === '약함' ? { ...best, lv: '하', big: undefined, weak: true } : best;
+  g.r = g.weak ? 0 : rOf(g);
+  return g;
 }
-module.exports = { FILE, FRESH_DAYS, parseKw, load, save, isFresh, attach, dayDiff, grade };
+
+// 노트 없는 임시저장 글의 검색어 파일(볼트 «5-개인/글 초안/임시저장 검색어.md»): `- 제목 일부 = 키1, 키2` (+ 끝에 «(약함)»)
+const LOOSE_REL = path.join('5-개인', '글 초안', '임시저장 검색어.md');
+function parseLooseLine(line) {
+  const m = String(line).match(/^\s*-\s+(.+?)\s+=\s+(.+?)\s*$/);
+  if (!m) return null;
+  const weak = /\(약함\)\s*$/;
+  return { key: m[1].trim(), kw: parseKw(m[2].replace(weak, '')), fit: weak.test(m[2]) ? '약함' : '' };
+}
+function readLooseKw(vault) {
+  try { return fs.readFileSync(path.join(vault, LOOSE_REL), 'utf8').split(/\r?\n/).map(parseLooseLine).filter((x) => x && x.key.length >= 2); } catch (e) { return []; }
+}
+module.exports = { FILE, FRESH_DAYS, parseKw, load, save, isFresh, attach, dayDiff, grade, LOOSE_REL, parseLooseLine, readLooseKw };

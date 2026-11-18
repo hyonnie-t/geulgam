@@ -116,6 +116,10 @@ main { max-width: 1200px; margin: 0 auto; padding: 0 var(--space-3) var(--space-
 .tag.nextup { background: var(--ink); color: var(--paper); font-weight: 600; }
 .tag.seo { border: 1px solid var(--ink); background: var(--paper); font-weight: 600; }
 .tag.vol { border: 1px dashed var(--ink); background: var(--paper); font-weight: 600; }
+.tag.vol.weak { color: var(--soft); font-weight: 400; border-style: dotted; }
+.d-grade { margin: 0 0 var(--space-2); font-size: 14px; line-height: 1.5; }
+.d-grade b { margin-right: var(--space-1); }
+.d-vol .rel { flex-basis: 100%; font-size: 13px; color: var(--soft); line-height: 1.5; }
 .vol-note { color: var(--soft); font-size: 13px; margin: var(--space-3) 0 0; }
 .d-vol { display: grid; gap: var(--space-2); margin: 0; }
 .d-vol .row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-3); align-items: baseline;
