@@ -158,7 +158,7 @@ function renderFilters() {
   $('#f-src').innerHTML = '<legend class="vh">어디서 온 글감</legend>' + srcs.map((s) => chip('src', s, view.src, s === '전체' ? '전체' : `${SRC_EMOJI[s] || ''} ${s}`, s === '전체' ? data.items.length : data.items.filter((i) => i.src === s).length)).join('');
   $('#f-where').innerHTML = '<legend class="vh">어디에 쓸 글</legend>' + ['전체', '블로그', '인스타'].map((w) => chip('where', w, view.where, w === '전체' ? '쓸 곳 전부' : w)).join('');
   // 정렬: 월 검색수가 붙은 카드가 하나라도 있을 때만 보인다
-  const hasVol = data.items.some((i) => i.vol);
+  const hasVol = data.items.some((i) => i.vol && i.stage !== '발행'); // 발행 칸 카드는 칩이 없어서 셈에서 뺀다
   if (!hasVol) view.sort = '기본';
   $('#f-sort').hidden = !hasVol;
   $('#f-sort').innerHTML = '<legend class="vh">카드 순서</legend>' + [['기본', '기본 순서'], ['검색량', '📈 검색량순']].map(([v, l]) => chip('sort', v, view.sort, l)).join('');
@@ -243,6 +243,7 @@ function volSec(it) {
   if (it.stage === '발행') return '';
   const v = it.vol;
   if (!v) {
+    if (it.volNone) return `<p class="hint">검색어 «${esc((it.kw || []).join(', '))}»는 네이버에서 월 검색수가 안 나왔어요. 더 흔한 말로 바꿔 달라고 Claude에게 부탁해 보세요.</p>`;
     if (it.kw && it.kw.length) return `<p class="hint">검색어 «${esc(it.kw.join(', '))}»의 월 검색수는 아직 안 쟀어요. 월요일 점검 때 들어와요.</p>`;
     if (!it.file) return '';
     return `<p class="hint">아직 검색어가 없어요. Claude에게 정해 달라고 하면 노트에 <code>검색어:</code> 한 줄이 생겨요.</p>

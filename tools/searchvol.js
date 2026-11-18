@@ -48,10 +48,13 @@ function setKw(spec) {
   const text = bom ? raw.slice(1) : raw;
   const line = '검색어: ' + kws.join(', ');
   const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
+  // 함수형 치환·위치 기반으로 이어 붙인다($ 문자·빈 속성 구간에 안전). 목록형 `검색어:`는 뒤따르는 «  - » 줄까지 함께 바꾼다.
   let out;
   if (!m) out = `---${nl}${line}${nl}---${nl}${text}`;
-  else if (/^검색어:/m.test(m[1])) out = text.replace(/^검색어:.*$/m, line);
-  else out = text.replace(/^---\r?\n/, `---${nl}`).replace(m[1], m[1] + nl + line);
+  else {
+    const fm = /^검색어:/m.test(m[1]) ? m[1].replace(/^검색어:.*(?:\r?\n[ \t]+-.*)*/m, () => line) : (m[1] ? m[1] + nl : '') + line;
+    out = '---' + nl + fm + nl + '---' + text.slice(m[0].length);
+  }
   fs.writeFileSync(hits[0], bom + out);
   console.log(`«${name}» ← ${line} (다음에 node tools/build.js 와 node tools/searchvol.js --write)`);
 }
@@ -92,6 +95,11 @@ const num = (v) => (typeof v === 'number' ? { n: v } : { n: 5, low: true });
   if (!args.includes('--write')) return;
 
   let calls = 0;
+  // 오늘 이미 조회가 막혔으면(429 등) 같은 날 다시 부르지 않는다(실패 뒤 재시도 금지)
+  if (stale.length && cache.failAt === TODAY) {
+    console.error('오늘 이미 조회가 멈췄어요. 다시 부르지 않습니다(내일 이후 다시).');
+    stale.length = 0;
+  }
   if (stale.length) {
     const kv = loadKey();
     for (let i = 0; i < stale.length && calls < MAX_CALLS; i += BATCH) {
@@ -100,6 +108,7 @@ const num = (v) => (typeof v === 'number' ? { n: v } : { n: 5, low: true });
       let list;
       try { list = await query(kv, hints); calls++; } catch (e) {
         console.error(`조회 멈춤(${e.message}). 다시 시도하지 않습니다. 막히면 효니가 웹 «키워드 도구» 캡처로 대신합니다.`);
+        cache.failAt = TODAY;
         break;
       }
       for (const k of hints) {

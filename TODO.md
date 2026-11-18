@@ -11,5 +11,5 @@
 - [x] 2. `tools/searchvol.js` — 미리보기 / `--write`(5개씩, 7일 캐시, 최대 4번) / `--todo` / `--set`
 - [x] 3. 카드 칩 «📈 월 …»·상세 창 검색수·«검색량순» 정렬·API 표시 문구
 - [x] 4. 데모 자료·sw 버전·CLAUDE.md·weekly-vault-check 단계
-- [ ] 5. 연결 점검표(webapp-connect-check), 폰·태블릿·PC 확인
+- [x] 5. 연결 점검표(webapp-connect-check), 폰·태블릿·PC 확인
 - [ ] 6. 별도 검토자 1명 → PR → 병합

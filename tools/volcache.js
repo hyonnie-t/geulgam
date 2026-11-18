@@ -7,7 +7,8 @@ const FRESH_DAYS = 7; // 같은 검색어는 7일 안에 다시 안 부른다(�
 // 노트 속성 «검색어: 임진왜란, 이순신 장군» → ['임진왜란', '이순신장군'] (API는 띄어쓰기를 뺀 말로 조회, 최대 2개)
 function parseKw(raw) {
   const list = Array.isArray(raw) ? raw : String(raw || '').split(/[,，、]/);
-  return [...new Set(list.map((s) => s.replace(/\s+/g, '').trim()).filter(Boolean))].slice(0, 2);
+  // 인라인 목록 `[a, b]`·따옴표 `"a", "b"` 형식도 받는다
+  return [...new Set(list.map((s) => s.replace(/[\[\]"'“”‘’]/g, '').replace(/\s+/g, '').trim()).filter(Boolean))].slice(0, 2);
 }
 function load(file = FILE) {
   try { const j = JSON.parse(fs.readFileSync(file, 'utf8').replace(/^﻿/, '')); return j && j.kw ? j : { v: 1, kw: {} }; } catch (e) { return { v: 1, kw: {} }; }
@@ -20,9 +21,10 @@ const isFresh = (e, today) => !!e && dayDiff(e.at, today) < FRESH_DAYS;
 function attach(items, cache) {
   let n = 0, at = '';
   for (const it of items) {
-    delete it.vol;
-    const kws = (it.kw || []).map((k) => ({ k, ...(cache.kw[k] || {}) })).filter((x) => x.at && !x.none);
-    if (!kws.length) continue;
+    delete it.vol; delete it.volNone;
+    const all = (it.kw || []).map((k) => ({ k, ...(cache.kw[k] || {}) }));
+    const kws = all.filter((x) => x.at && !x.none);
+    if (!kws.length) { if (all.length && all.every((x) => x.none)) it.volNone = true; continue; } // 네이버에 결과가 없는 검색어
     const total = Math.max(...kws.map((x) => (x.pc || 0) + (x.mo || 0)));
     it.vol = {
       kws: kws.map((x) => ({ k: x.k, pc: x.pc, mo: x.mo, comp: x.comp, low: x.low || undefined })),
