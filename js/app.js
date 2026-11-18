@@ -24,7 +24,7 @@ const gWhy = (g) => (g.weak ? '찾는 사람은 있어도 이 글이 그 답은 
 // 칩 숫자는 등급을 준 검색어의 것(검색어가 둘일 때 큰 숫자와 등급이 서로 다른 말이면 헷갈린다)
 const volChip = (v) => `월 ${v.low ? '10 미만' : fmtN(v.g ? v.g.t : v.total)}${v.g ? ` · ${gLabel(v.g)}` : ''}`;
 // 줄 세우는 값: 등급(g.r) 먼저, 같은 등급은 많이 찾는 순. 옛 자료(g 없음)는 검색수만, 안 잰 카드는 맨 뒤
-const volRank = (i) => (i.vol ? [i.vol.g ? i.vol.g.r : 1, i.vol.total] : [-1, -1]);
+const volRank = (i) => (i.vol ? (i.vol.g ? [i.vol.g.r, i.vol.g.t] : [1, i.vol.total]) : [-1, -1]);
 const OLD = 21, VERY_OLD = 42; // 묵은 글감 기준(일)
 const VAULT = '효니노트';
 const CACHE = 'geulgam-cache';

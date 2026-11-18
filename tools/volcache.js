@@ -40,7 +40,6 @@ function attach(items, cache) {
 // 검색어마다: 30 미만 «하» · 30~99 «중» · 100~2,999 «상» · 3,000 이상 «중»(big: 찾는 사람은 많지만 큰 말). 카드 등급은 검색어 중 가장 좋은 것.
 // 처음엔 300~9,999를 «상»으로 잡았다가 낮췄다: 지금까지 실제 검색 유입 5번이 모두 작은 틈새 말(역사 게임 수업 등)이었고, 제미나이 검토도 같은 지적.
 // 노트에 `검색맞음: 약함`이 있으면(생각 글 — 찾는 사람이 바라는 답과 글이 다름) 숫자와 상관없이 «하».
-const LV = { 상: 2, 중: 1, 하: 0 };
 function gradeOne(x) {
   const t = (x.pc || 0) + (x.mo || 0);
   if (x.low || t < 30) return { lv: '하', k: x.k, t };
@@ -49,10 +48,12 @@ function gradeOne(x) {
   return { lv: '중', k: x.k, t, big: true };
 }
 function grade(kws, fit) {
-  const best = kws.map(gradeOne).sort((a, b) => LV[b.lv] - LV[a.lv] || b.t - a.t)[0];
-  const g = fit === '약함' ? { ...best, lv: '하', big: undefined, weak: true } : best;
   // r = 줄 세울 때 쓰는 값 하나(먼저 쓸 글·앱 «검색 기대순»이 같은 순서를 쓰게): 상 4 > 중 3 > 큰 말 2 > 하 1 > 맞음 약함 0
-  g.r = g.weak ? 0 : g.lv === '상' ? 4 : g.lv === '중' ? (g.big ? 2 : 3) : 1;
+  const rOf = (g) => (g.lv === '상' ? 4 : g.lv === '중' ? (g.big ? 2 : 3) : 1);
+  // 검색어가 둘이면 r이 높은 것, 같으면 많이 찾는 것(같은 «중»에서 큰 말이 작은 말을 이기지 않게 — 검토 지적)
+  const best = kws.map(gradeOne).sort((a, b) => rOf(b) - rOf(a) || b.t - a.t)[0];
+  const g = fit === '약함' ? { ...best, lv: '하', big: undefined, weak: true } : best;
+  g.r = g.weak ? 0 : rOf(g);
   return g;
 }
 
