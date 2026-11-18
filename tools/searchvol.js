@@ -7,6 +7,7 @@
 //   node tools/searchvol.js --write    새로 부를 키워드를 조회해 캐시·drawer.local.json에 반영(weekly-vault-check 4-1 build 뒤, upload 앞)
 //   node tools/searchvol.js --todo     «글감·초안» 카드 중 검색어가 아직 없는 노트 이름(Claude가 검색어를 정할 때)
 //   node tools/searchvol.js --set "노트이름=임진왜란,이순신"   그 노트 맨 위 속성에 `검색어: 임진왜란, 이순신` 한 줄(1~2개)
+//   node tools/searchvol.js --fit "노트이름=약함"   `검색맞음: 약함` 한 줄 — 찾는 사람이 바라는 답과 글이 다를 때(생각 글). 먼저 쓸 글 순서에서 안 올린다
 // 검색어는 노트 속성 `검색어:`(앱은 보기만 하고 입력이 없어서 Claude가 정해 노트에 쓴다).
 const fs = require('fs'), path = require('path'), crypto = require('crypto');
 const vc = require('./volcache');
@@ -40,23 +41,36 @@ function setKw(spec) {
   const i = spec.indexOf('=');
   const name = spec.slice(0, i).trim(), kws = vc.parseKw(spec.slice(i + 1));
   if (i < 1 || !kws.length) { console.error('형식: --set "노트이름=키워드1,키워드2"'); process.exit(1); }
+  writeProp(name, '검색어', kws.join(', '));
+}
+// --fit "노트이름=약함": 찾는 사람이 바라는 답과 글이 다른 검색어(생각 글)라는 표시. "노트이름=" 처럼 비우면 그 줄을 지운다.
+function setFit(spec) {
+  const i = spec.indexOf('=');
+  const name = spec.slice(0, i).trim(), v = spec.slice(i + 1).trim();
+  if (i < 1 || (v && v !== '약함')) { console.error('형식: --fit "노트이름=약함" (지우려면 "노트이름=")'); process.exit(1); }
+  writeProp(name, '검색맞음', v);
+}
+// 노트 맨 위 속성에 `key: value` 한 줄을 쓴다(있으면 바꾸고, value가 비면 그 줄을 지운다)
+function writeProp(name, key, value) {
   const hits = findNote(name);
   if (hits.length !== 1) { console.error(`노트 «${name}»를 ${hits.length}개 찾음 — 하나만 있어야 씁니다.`); process.exit(1); }
   const raw = fs.readFileSync(hits[0], 'utf8');
   const nl = raw.includes('\r\n') ? '\r\n' : '\n';
   const bom = raw.startsWith('﻿') ? '﻿' : '';
   const text = bom ? raw.slice(1) : raw;
-  const line = '검색어: ' + kws.join(', ');
+  const line = value ? key + ': ' + value : '';
+  const has = new RegExp('^' + key + ':', 'm');
+  const whole = new RegExp('^' + key + ':.*(?:\\r?\\n[ \\t]+-.*)*' + (value ? '' : '(?:\\r?\\n)?'), 'm'); // 목록형이면 뒤따르는 «  - » 줄까지
   const m = text.match(/^---\r?\n([\s\S]*?)\r?\n---/);
   // 함수형 치환·위치 기반으로 이어 붙인다($ 문자·빈 속성 구간에 안전). 목록형 `검색어:`는 뒤따르는 «  - » 줄까지 함께 바꾼다.
   let out;
-  if (!m) out = `---${nl}${line}${nl}---${nl}${text}`;
+  if (!m) { if (!line) return console.log(`«${name}» 바꿀 것 없음`); out = `---${nl}${line}${nl}---${nl}${text}`; }
   else {
-    const fm = /^검색어:/m.test(m[1]) ? m[1].replace(/^검색어:.*(?:\r?\n[ \t]+-.*)*/m, () => line) : (m[1] ? m[1] + nl : '') + line;
+    const fm = (has.test(m[1]) ? m[1].replace(whole, () => line) : line ? (m[1] ? m[1] + nl : '') + line : m[1]).replace(/\r?\n$/, '');
     out = '---' + nl + fm + nl + '---' + text.slice(m[0].length);
   }
   fs.writeFileSync(hits[0], bom + out);
-  console.log(`«${name}» ← ${line} (다음에 node tools/build.js 와 node tools/searchvol.js --write)`);
+  console.log(`«${name}» ← ${line || key + ' 줄 지움'} (다음에 node tools/build.js 와 node tools/searchvol.js --write)`);
 }
 
 // ---------- 조회 ----------
@@ -80,6 +94,7 @@ const num = (v) => (typeof v === 'number' ? { n: v } : { n: 5, low: true });
 
 (async () => {
   if (opt('--set')) return setKw(opt('--set'));
+  if (args.includes('--fit')) return setFit(opt('--fit', ''));
   const d = readDrawer();
   const cards = d.items.filter((i) => i.kw && i.kw.length);
   const cache = vc.load(CACHE);
@@ -115,7 +130,11 @@ const num = (v) => (typeof v === 'number' ? { n: v } : { n: 5, low: true });
         const row = list.find((x) => String(x.relKeyword).replace(/\s+/g, '').toLowerCase() === k.toLowerCase());
         if (!row) { cache.kw[k] = { none: true, at: TODAY }; continue; }
         const pc = num(row.monthlyPcQcCnt), mo = num(row.monthlyMobileQcCnt);
-        cache.kw[k] = { pc: pc.n, mo: mo.n, comp: row.compIdx, low: pc.low && mo.low ? true : undefined, at: TODAY };
+        // 같이 찾는 말(rel): 같은 응답에 딸려 온 연관 검색어 중 이 말을 품은 것, 많이 찾는 순 6개(추가 호출 없음). 제목·소제목에 쓸 긴 꼬리 말 후보.
+        const rel = list.filter((x) => x !== row && String(x.relKeyword).replace(/\s+/g, '').toLowerCase().includes(k.toLowerCase()))
+          .map((x) => ({ k: String(x.relKeyword), t: num(x.monthlyPcQcCnt).n + num(x.monthlyMobileQcCnt).n, comp: x.compIdx }))
+          .sort((a, b) => b.t - a.t).slice(0, 6);
+        cache.kw[k] = { pc: pc.n, mo: mo.n, comp: row.compIdx, low: pc.low && mo.low ? true : undefined, rel: rel.length ? rel : undefined, at: TODAY };
       }
     }
     vc.save(cache, CACHE);

@@ -81,6 +81,7 @@ for (const s of SOURCES) {
       author: prop(fm, '저자'),
       stageProp: prop(fm, '글감'),
       kw: volcache.parseKw(prop(fm, '검색어') || listProp(fm, '검색어')), // 네이버 월 검색수를 조회할 말(tools/searchvol.js)
+      kwFit: prop(fm, '검색맞음') === '약함' ? '약함' : '', // 찾는 사람은 있어도 이 글이 그 답은 아닌 검색어(생각 글) — 먼저 쓸 글 순서에서 안 올린다
       origin: prop(fm, '출처'),
       used: listProp(fm, '쓰임'),
       date: [prop(fm, '글감날짜'), prop(fm, '독서일'), prop(fm, '일자'), prop(fm, 'created'), prop(fm, '날짜')].find(isDate) || '',
@@ -304,6 +305,7 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
       len: n.len,
       head: n.head,
       kw: n.kw.length ? n.kw : undefined,
+      kwFit: n.kw.length && n.kwFit ? n.kwFit : undefined,
       draft: draft ? { ...draftInfo(draft), title: draft.title } : undefined,
     });
   }
@@ -366,6 +368,8 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
   // ② 빈자리는 서랍에서 저절로: 임시저장(많이 쓴 순) > 쓰기 시작한 초안 > 이번 주 글감 > 묵은 글감(오래된 순), 모두 NEXT_MAX칸까지
   // ③ 발행된 줄은 칸을 차지하지 않고 «다 냄»(auto/done 표시)으로 맨 뒤에 DONE_DAYS일 남았다가 저절로 빠진다. 노트를 손으로 고칠 일 없음.
   const NEXT_MAX = 5, DONE_DAYS = 14;
+  // 지난 조회 결과(캐시)를 카드에 붙임. 새로 부르지 않는다. 먼저 쓸 글 순서가 검색 기대(vol.g)를 쓰므로 순서 계산보다 앞에서 붙인다(2026-11-18)
+  const vol = volcache.attach(items, volcache.load());
   const pinned = [];
   const nextFile = path.join(VAULT, '5-개인', '글 초안', '먼저 쓸 글.md');
   if (fs.existsSync(nextFile)) {
@@ -407,6 +411,12 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
     [open.filter((i) => i.stage === '초안' && i.draft), (i) => `임시저장 ${fmtN(i.draft.chars)}자 — 많이 써 둔 글부터 마무리${i.seo ? ' · 🔎 ' + seoWhy(i) : ''}`],
     // 검색 철(SEO): 날짜가 가까운 것 > 오늘 많이 찾는 말. 쓰던 글·이번 주 글감을 다 밀어내지 않게 2칸까지
     [open.filter((i) => i.seo).sort((a, b) => (a.seo.trend ? 1 : 0) - (b.seo.trend ? 1 : 0) || (a.seo.left ?? 99) - (b.seo.left ?? 99)).slice(0, 2), (i) => '🔎 ' + seoWhy(i)],
+    // 검색 기대(2026-11-18, 출처: 효니 말 «먼저 쓸 글도 검색량 바탕으로 해야하는 거 아냐?»): 월 검색수 등급 «상» → «중»(volcache.grade), 같은 등급 안에서는 쓰던 글 먼저·많이 찾는 순.
+    // 등급 «하»·검색어 없음·«검색맞음: 약함»은 올리지 않고 아래 옛 순서를 따른다.
+    ...['상', '중'].map((lv) => [
+      open.filter((i) => i.vol && i.vol.g && i.vol.g.lv === lv).sort((a, b) => (a.stage === '초안' ? 0 : 1) - (b.stage === '초안' ? 0 : 1) || b.vol.g.t - a.vol.g.t),
+      (i) => `📈 «${i.vol.g.k}» — ${i.vol.g.big ? '찾는 사람은 많지만 큰 말이라 구체적인 말과 묶어 쓰기' : lv === '상' ? '찾는 사람이 꾸준하고 작은 블로그도 노려볼 크기' : '찾는 사람이 조금 있는 말'}${i.stage === '초안' ? ' · 쓰던 글' : ''}`,
+    ]),
     [open.filter((i) => i.stage === '초안' && !i.draft), () => '쓰기 시작한 글 — 이어서 쓰기'],
     [open.filter((i) => i.stage === '글감' && weekIds.has(i.id)), () => '이번 주 글감으로 뽑힘'],
     [open.filter((i) => i.stage === '글감' && i.age >= 21).sort((a, b) => b.age - a.age), (i) => `묵은 지 ${i.age}일 — 더 묵기 전에`],
@@ -443,7 +453,6 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
   const recentPosts = posts.filter((p) => p.d && daysBetween(p.d, TODAY) <= 45).sort((a, b) => (a.d < b.d ? 1 : -1)).slice(0, 12)
     .map((p) => ({ k: p.k, d: p.d, t: p.t || p.first, u: p.u, linked: items.some((i) => i.pub.some((q) => q.u === p.u)) }));
 
-  const vol = volcache.attach(items, volcache.load()); // 지난 조회 결과(캐시)를 카드에 붙임. 새로 부르지 않는다
   const out = {
     v: 1,
     volAt: vol.at || undefined,
