@@ -8,6 +8,7 @@
 //   node tools/ideas.js --write --reply   노트 만들고, 그 쪽지를 «끝남» + 답장 «글감 서랍으로 옮겼어요»로(쪽지함 inbox.js done과 같은 칸)
 // 쪽지 글(t)은 효니의 생각이라 볼트 노트 본문에만 옮긴다. 화면 출력은 건수만.
 // 끝난(st: done) 쪽지는 이미 처리된 것으로 보고 옮기지 않는다. 사진만 있는 쪽지는 글이 없어 건너뛴다.
+// 쪽지함 판에서 클로드에게 시킨 쪽지(go·run, 2026-11-18)는 클로드 세션이 직접 하므로 옮기지도 끝남으로 닫지도 않는다.
 process.noDeprecation = true;
 const { spawnSync } = require('child_process');
 const fs = require('fs');
@@ -80,7 +81,7 @@ function titleOf(t) {
 
 const data = JSON.parse(fbcli(['database:get', BASE]).trim() || '{}') || {};
 const all = Object.entries(data).map(([id, v]) => ({ id, ...v })).filter((x) => x.tag === TAG);
-const todo = all.filter((x) => /^[\w-]+$/.test(x.id) && x.st !== 'done' && !known.has(x.id) && String(x.t || '').trim());
+const todo = all.filter((x) => /^[\w-]+$/.test(x.id) && x.st !== 'done' && !x.go && !x.run && !known.has(x.id) && String(x.t || '').trim());
 const skipped = { done: all.filter((x) => x.st === 'done' && !known.has(x.id)).length, moved: all.filter((x) => known.has(x.id)).length, noText: all.filter((x) => x.st !== 'done' && !known.has(x.id) && !String(x.t || '').trim()).length };
 
 let made = 0, replied = 0;
@@ -121,7 +122,7 @@ for (const x of todo.sort((a, b) => a.at - b.at)) {
 
 if (WRITE && REPLY) {
   // 이번에 만든 것 + 전에 노트만 만들고 아직 안 끝난 쪽지
-  const ids = [...madeIds, ...all.filter((x) => known.has(x.id) && x.st !== 'done').map((x) => x.id)];
+  const ids = [...madeIds, ...all.filter((x) => known.has(x.id) && x.st !== 'done' && !x.go && !x.run).map((x) => x.id)];
   for (const id of ids) {
     const tmp = path.join(os.tmpdir(), `geulgam-idea-${id}.json`);
     fs.writeFileSync(tmp, JSON.stringify({ st: 'done', re: REPLY_TEXT, rat: Date.now() }));
