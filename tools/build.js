@@ -414,7 +414,7 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
     // 검색 기대(2026-11-18, 출처: 효니 말 «먼저 쓸 글도 검색량 바탕으로 해야하는 거 아냐?»): 월 검색수 등급 «상» → «중»(volcache.grade), 같은 등급 안에서는 쓰던 글 먼저·많이 찾는 순.
     // 등급 «하»·검색어 없음·«검색맞음: 약함»은 올리지 않고 아래 옛 순서를 따른다.
     ...['상', '중'].map((lv) => [
-      open.filter((i) => i.vol && i.vol.g && i.vol.g.lv === lv).sort((a, b) => (a.stage === '초안' ? 0 : 1) - (b.stage === '초안' ? 0 : 1) || b.vol.g.t - a.vol.g.t),
+      open.filter((i) => i.vol && i.vol.g && i.vol.g.lv === lv).sort((a, b) => (a.stage === '초안' ? 0 : 1) - (b.stage === '초안' ? 0 : 1) || (a.vol.g.big ? 1 : 0) - (b.vol.g.big ? 1 : 0) || b.vol.g.t - a.vol.g.t), // 큰 말은 같은 등급 안에서 뒤로(검토자 지적)
       (i) => `📈 «${i.vol.g.k}» — ${i.vol.g.big ? '찾는 사람은 많지만 큰 말이라 구체적인 말과 묶어 쓰기' : lv === '상' ? '찾는 사람이 꾸준하고 작은 블로그도 노려볼 크기' : '찾는 사람이 조금 있는 말'}${i.stage === '초안' ? ' · 쓰던 글' : ''}`,
     ]),
     [open.filter((i) => i.stage === '초안' && !i.draft), () => '쓰기 시작한 글 — 이어서 쓰기'],
