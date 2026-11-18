@@ -4,6 +4,7 @@
 // 쓰는 법: node tools/build.js [--vault 경로] [--out 파일] [--date YYYY-MM-DD] [--offline]
 const fs = require('fs');
 const path = require('path');
+const volcache = require('./volcache');
 
 const ROOT = path.resolve(__dirname, '..');
 const args = process.argv.slice(2);
@@ -79,6 +80,7 @@ for (const s of SOURCES) {
       title: prop(fm, '제목') || name,
       author: prop(fm, '저자'),
       stageProp: prop(fm, '글감'),
+      kw: volcache.parseKw(prop(fm, '검색어') || listProp(fm, '검색어')), // 네이버 월 검색수를 조회할 말(tools/searchvol.js)
       origin: prop(fm, '출처'),
       used: listProp(fm, '쓰임'),
       date: [prop(fm, '글감날짜'), prop(fm, '독서일'), prop(fm, '일자'), prop(fm, 'created'), prop(fm, '날짜')].find(isDate) || '',
@@ -301,6 +303,7 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
       pub: pub.map((p) => ({ k: p.k, d: p.d, t: p.t || p.first, u: p.u })),
       len: n.len,
       head: n.head,
+      kw: n.kw.length ? n.kw : undefined,
       draft: draft ? { ...draftInfo(draft), title: draft.title } : undefined,
     });
   }
@@ -440,8 +443,10 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
   const recentPosts = posts.filter((p) => p.d && daysBetween(p.d, TODAY) <= 45).sort((a, b) => (a.d < b.d ? 1 : -1)).slice(0, 12)
     .map((p) => ({ k: p.k, d: p.d, t: p.t || p.first, u: p.u, linked: items.some((i) => i.pub.some((q) => q.u === p.u)) }));
 
+  const vol = volcache.attach(items, volcache.load()); // 지난 조회 결과(캐시)를 카드에 붙임. 새로 부르지 않는다
   const out = {
     v: 1,
+    volAt: vol.at || undefined,
     at: new Date().toISOString(),
     today: TODAY,
     week,
@@ -461,6 +466,6 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
   fs.writeFileSync(OUT, JSON.stringify(out));
   const cnt = STAGES.map((s) => s + ' ' + items.filter((i) => i.stage === s).length).join(' · ');
   // 내용은 출력하지 않고 숫자만
-  console.log(`기준일 ${TODAY} · 서랍 ${items.length}개(${cnt}) · 깊숙이 ${deep.length} · 최근 글 ${recentPosts.length} · 블로그 ${blog.length}/인스타 ${insta.length} · 임시저장 ${td.drafts.length}(노트와 이어짐 ${draftByNote.size}) · 메일 글감 ${items.filter((i) => i.src === '메일').length} · 책장 글감 ${items.filter((i) => i.src === '책장').length} · 먼저 쓸 글 ${next.length}(이어짐 ${next.filter((x) => x.id).length}) · 검색 철 ${seoDays.length}개 날·트렌드 ${trends.length}개 → 맞은 카드 ${items.filter((i) => i.seo).length}`);
+  console.log(`기준일 ${TODAY} · 서랍 ${items.length}개(${cnt}) · 깊숙이 ${deep.length} · 최근 글 ${recentPosts.length} · 블로그 ${blog.length}/인스타 ${insta.length} · 임시저장 ${td.drafts.length}(노트와 이어짐 ${draftByNote.size}) · 메일 글감 ${items.filter((i) => i.src === '메일').length} · 책장 글감 ${items.filter((i) => i.src === '책장').length} · 먼저 쓸 글 ${next.length}(이어짐 ${next.filter((x) => x.id).length}) · 월 검색수 ${vol.cards}장(검색어 ${items.filter((i) => i.kw).length}장) · 검색 철 ${seoDays.length}개 날·트렌드 ${trends.length}개 → 맞은 카드 ${items.filter((i) => i.seo).length}`);
   console.log('→ ' + path.relative(process.cwd(), OUT));
 })().catch((e) => { console.error(e.message); process.exit(1); });

@@ -115,6 +115,14 @@ main { max-width: 1200px; margin: 0 auto; padding: 0 var(--space-3) var(--space-
 .next-card .st { flex: none; }
 .tag.nextup { background: var(--ink); color: var(--paper); font-weight: 600; }
 .tag.seo { border: 1px solid var(--ink); background: var(--paper); font-weight: 600; }
+.tag.vol { border: 1px dashed var(--ink); background: var(--paper); font-weight: 600; }
+.vol-note { color: var(--soft); font-size: 13px; margin: var(--space-3) 0 0; }
+.d-vol { display: grid; gap: var(--space-2); margin: 0; }
+.d-vol .row { display: flex; flex-wrap: wrap; justify-content: space-between; gap: var(--space-1) var(--space-3); align-items: baseline;
+  background: color-mix(in srgb, var(--idea) 22%, var(--paper)); border-radius: 12px; padding: var(--space-2) var(--space-3); }
+.d-vol .k { font-weight: 600; white-space: nowrap; }
+.d-vol .n { font-size: 14px; color: var(--soft); }
+.d-vol .n b { color: var(--ink); font-weight: 600; }
 
 /* ---------- 이번 주 글감 ---------- */
 .week { margin-bottom: var(--space-4); }
