@@ -21,6 +21,7 @@
   - 같이 찾는 말(2026-11-18, Claude 판단): `searchvol.js --write`가 같은 응답에 딸려 온 연관 검색어 중 그 말을 품은 것 6개를 캐시 `rel`에 둔다(추가 호출 없음. [2026-11-18 바뀜] `vol.kws[].rel`로 drawer에 넣어 상세 창 «같이 찾는 말»과 `searchvol.js --show`가 읽는다). 초안 쓸 때 제목·소제목에 넣을 긴 꼬리 말 후보로 Claude가 읽는다.
   - `next` 칸 형식: `{n, key, why, id, stage, pub?, auto?, done?}`(2026-11-15에 `auto`·`done`만 더함, 나머지 그대로). 카드의 `next`(번호)는 안 나간 줄에만 붙는다.
 - 네이버 월 검색수(2026-11-18, 출처: 효니 말 «글감 목록 웹앱에 붙여서 네가 연동해서 쓸 방법 없니?», 약관·호출 규칙은 위키 `도구/네이버-검색광고-api.md`·`결정-기록.md` 2026-11-18): 앱은 입력이 없으니 **검색어는 Claude가 정해 노트 속성 `검색어: 키워드1, 키워드2`(1~2개, 띄어쓰기는 조회 때 뺌)로 쓴다**(`node tools/searchvol.js --todo`로 없는 노트, `--set "노트이름=키1,키2"`로 씀). `node tools/searchvol.js --write`가 새로 부를 키워드만 **5개씩·한 번 돌 때 최대 4번** 조회해 `searchvol.local.json`(캐시, gitignore)에 저장하고 `drawer.local.json`에 `vol`을 붙인다. 같은 키워드는 7일 안에 다시 안 부른다. 실패(429 등)하면 다시 시도하지 않고 멈춘다. build.js는 캐시를 읽어 `vol`을 붙일 뿐 API를 부르지 않는다(tistory-publish의 build+upload도 안전). 카드 «📈 월 3.1만 · 기대 상»·«검색 기대순» 정렬(처음 이름 «검색량순», 저장 값은 `검색량` 그대로)·상세 창 등급·PC/모바일/광고 경쟁·같이 찾는 말, 앱 곳곳에 «네이버 검색광고 API 값·참고만, 글에 숫자 그대로 싣지 않음» 표시(약관 제7조③). «< 10»은 5로 저장해 «10 미만». 발행 칸 카드엔 칩을 안 단다. 키는 `%USERPROFILE%\claude-mcp\naver-searchad\`, 레포·OneDrive에 없다. 막히면 효니가 웹 «키워드 도구» 캡처로 대신한다. 시점: weekly-vault-check 4-1 build 뒤, upload 앞(4-1b).
+- 구글 서치콘솔(2026-11-20, 출처: 효니 말 «구글 콘솔 보니까 데이터 분석 잘해주는데 이거랑 네이버 api 검색 이랑 연동하면 더 좋은 글 나올 수 있지 않을까» → «붙이고 서치 콘솔값도 분석 더 할 거 없는지 봐주라»): 네이버 월 검색수는 «얼마나 찾나», 서치콘솔은 «내 글이 구글에서 어떤 말로 몇 번 보이고 눌렸나»라 서로 채운다. `node tools/gsc.js --write`가 최근 90일(끝 날짜 3일 전) 글별·검색어별 노출·클릭·평균 순위를 `searchconsole.local.json`(캐시, gitignore)에 받고(하루 한 번, `--force`로 무시), build.js가 `tools/gsccache.js`로 캐시만 읽어 붙인다(API 안 부름): 발행 카드 `gsc {i,c,pos,q[5]}`(카드 칩 «🔎 구글 클릭 N · N위», 상세 창 «구글 검색(서치콘솔)»), 최근 글 `gsc {i,c,pos}`(목록 끝 «구글 노출·클릭»), 글감·초안 카드의 `검색어:`가 이미 구글에서 내 블로그로 들어온 말이면 `gscHit`(상세 창 한 줄), 맨 위 `gsc.tips` 최대 4개 → 서랍 «🔎 구글에서 손볼 글»(👀 보이는데 덜 눌림: 노출 50↑·클릭률 2%↓ / 🪜 2쪽 문턱: 평균 8~20위·노출 20↑ / 🤼 같은 말로 다툼: 같은 검색어(합 10↑)에 내 글 둘, 각 카드에 «부탁할 말 복사»). 눈금은 Claude 판단(90일 노출 1,476·클릭 61 기준), 글이 쌓이면 다시 맞춘다. 주소는 `gsccache.normUrl` 한 곳에서 맞춘다(퍼센트 인코딩·`/m/` 모바일 주소를 한 글로 합침). 지금 블로그 RSS에 없는 주소(주소를 바꾸기 전 옛 주소·첫 화면·카테고리)는 손볼 글에서 뺀다 — 첫 실행에서 수능 AI 안경 글의 옛 주소·새 주소가 «다툼»으로 잘못 잡혔다. 권한은 읽기 전용 `webmasters.readonly` 하나, 클라이언트는 구글 MCP와 같은 것(`~/claude-mcp/google-mcp/credentials.json`, GCP 프로젝트 hyonnie-tools에 Search Console API 켬 2026-11-20), 열쇠는 PC마다 `%USERPROFILE%\claude-mcp\search-console\token.json`(레포·OneDrive에 없음, `gsc.js login`으로 브라우저 허락). 내 사이트 자료라 네이버 검색광고 API 같은 용도 제한은 없다. 시점: weekly-vault-check 4-1c(4-1b ④ build 앞).
 - 갱신 시점: 월요일 weekly-vault-check 4-1, 그리고 `tistory-publish` 스킬이 공개 직후 build+upload(2026-11-15). 그 밖의 발행(인스타)은 다음 월요일에 보인다. 순서를 바꿀 때는 그 노트만 고친다.
 
 ## 구조
@@ -75,6 +76,26 @@
 | 볼트 노트에 `검색어:` 쓰기(`--set`) | 위치 기반으로 한 줄만 더함: `$` 든 속성·빈 속성 구간·목록형 `검색어:`·CRLF·BOM·frontmatter 없음 모두 시험(2026-11-18 검토자 지적 반영). 같은 이름 노트가 볼트에 둘 이상이면 거부 ✓ | searchvol.js `setKw` |
 | 결과 없는 검색어 | 캐시에 `none`으로 7일 저장 → 카드 `volNone`, 상세 창에 «안 나왔어요, 더 흔한 말로» 안내 ✓ | volcache.js `attach` |
 | 조회 실패 | 캐시 `failAt` 날짜가 오늘이면 같은 날 다시 안 부름 ✓ | searchvol.js |
+
+새 칸(2026-11-20) = 서치콘솔 캐시 `searchconsole.local.json` → 카드 `gsc`·`gscHit`, 최근 글 `gsc`, 서랍 `gsc {at,start,end,total,tips}`(계산은 `tools/gsccache.js` 한 곳).
+
+| 흐름 | 서치콘솔 값은 어떻게 되나 | 트리거 |
+|---|---|---|
+| build.js(주간·발행 직후) | 캐시만 읽어 붙임, API 안 부름. 캐시 없으면 아무것도 안 붙고 «구글에서 손볼 글» 칸이 숨음 ✓ | build.js `gsccache.attach` |
+| 칸 이동 | 발행 칸 카드만 `gsc`(블로그 주소가 있을 때), 글감·초안은 `gscHit`만. 인스타 글은 구글 값 없음 ✓ | gsccache `attach` |
+| 한 노트가 블로그에 여러 번 나감 | 주소 여러 개를 합쳐 노출·클릭 더하고 순위는 노출 가중 평균 ✓ | gsccache `stat` |
+| 모바일 주소(`/m/entry`)·퍼센트 인코딩 | `normUrl`로 같은 글로 합침 ✓ | gsccache `normUrl` |
+| 글 주소를 바꾼 경우 | 옛 주소는 손볼 글에서 빠지고 카드·최근 글은 지금 주소 값만(옛 주소 노출은 안 보임 — 구글이 합치면 사라짐) — 의도 | gsccache `tips` live |
+| 먼저 쓸 글·검색 기대 순서 | 안 건드림(서치콘솔 값은 순서에 안 씀). 손볼 글은 따로 칸 ✓ | — |
+| 거르기·정렬 | 손볼 글은 거르기 밖(블로그 글 전체 대상). 카드 칩은 정렬에 안 씀 ✓ | app.js renderGsc |
+| 상세 창 | «네이버 월 검색수» 다음에 «구글 검색(서치콘솔)»: 발행=숫자+검색어 5개, 글감·초안=이미 들어온 말 ✓ | app.js `gscSec` |
+| 부탁할 말 | 손볼 글 카드마다 고친본 부탁 문장 복사(공개 글 제목·주소만, 노트 내용 없음) ✓ | app.js `gscAsk` |
+| 로그인·Firebase | `gsc`는 drawer에 들어가 같이 올라감(숫자·공개 글 제목·검색어). 주인만 읽음 ✓. 빈 목록은 Firebase가 지우므로 `arr()`로 받음 ✓ | app.js show |
+| 옛 drawer·Firebase 자료 | `gsc` 없음 → 칸 숨김·칩 없음 ✓ | app.js |
+| 새로고침·sw | VERSION v15 ✓ | sw.js |
+| 데모 | `demo/drawer.json`에 손볼 글 3종·발행 카드 gsc·글감 카드 gscHit·최근 글 gsc 연습 값 ✓ | demo/drawer.json |
+| 다른 PC(열쇠 없음) | `gsc.js --write`가 «로그인이 아직 없어요»로 멈추고 weekly는 건너뜀. 캐시는 OneDrive 폴더라 다른 PC 값으로 build ✓ | weekly 4-1c |
+| 발행 직후(tistory-publish build+upload) | 새 글은 다음 서치콘솔 받기(월요일) 전까지 구글 값 없음 — 의도(구글 자료가 2~3일 늦음) | — |
 
 같은 계산이 두 곳(2026-11-18 점검): 등급과 줄 세우는 값은 `volcache.grade` 한 곳(`vol.g.lv`·`vol.g.r`)이고 build.js 순서 풀·app.js 정렬·칩이 그 값을 읽기만 한다. 등급 설명 글은 build.js `why`(먼저 쓸 글 줄)와 app.js `gWhy`(상세 창) 두 곳에 있다 — 눈금을 바꾸면 둘 다 본다. «10 미만» 판정 — 카드 칩은 `vol.low`(두 값 모두 10 미만), 상세 창은 값이 5일 때. 한쪽만 10 미만인 검색어는 칩은 합계, 상세는 칸별 «10 미만»(의도, 합계는 근사).
 남은 메모: 약관상 API가 끊기면 `searchvol.js --write`가 «조회 멈춤»을 알리고 카드엔 지난 값이 그대로 남는다(조회일 표시로 낡은 값 구분).

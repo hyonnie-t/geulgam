@@ -5,6 +5,7 @@
 const fs = require('fs');
 const path = require('path');
 const volcache = require('./volcache');
+const gsccache = require('./gsccache');
 
 const ROOT = path.resolve(__dirname, '..');
 const args = process.argv.slice(2);
@@ -459,9 +460,13 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
   const recentPosts = posts.filter((p) => p.d && daysBetween(p.d, TODAY) <= 45).sort((a, b) => (a.d < b.d ? 1 : -1)).slice(0, 12)
     .map((p) => ({ k: p.k, d: p.d, t: p.t || p.first, u: p.u, linked: items.some((i) => i.pub.some((q) => q.u === p.u)) }));
 
+  // 구글 서치콘솔(2026-11-20): 캐시만 읽어 발행 카드·최근 글에 노출·클릭·순위, 글감 카드에 «구글에서 이미 들어온 말», 맨 위에 손볼 글
+  const gsc = gsccache.attach(items, recentPosts, posts);
+
   const out = {
     v: 1,
     volAt: vol.at || undefined,
+    gsc: gsc ? { at: gsc.at, start: gsc.start, end: gsc.end, total: gsc.total, tips: gsc.tips } : undefined,
     at: new Date().toISOString(),
     today: TODAY,
     week,
@@ -481,6 +486,6 @@ const daysBetween = (a, b) => Math.round((new Date(b) - new Date(a)) / 864e5);
   fs.writeFileSync(OUT, JSON.stringify(out));
   const cnt = STAGES.map((s) => s + ' ' + items.filter((i) => i.stage === s).length).join(' · ');
   // 내용은 출력하지 않고 숫자만
-  console.log(`기준일 ${TODAY} · 서랍 ${items.length}개(${cnt}) · 깊숙이 ${deep.length} · 최근 글 ${recentPosts.length} · 블로그 ${blog.length}/인스타 ${insta.length} · 임시저장 ${td.drafts.length}(노트와 이어짐 ${draftByNote.size}) · 메일 글감 ${items.filter((i) => i.src === '메일').length} · 책장 글감 ${items.filter((i) => i.src === '책장').length} · 먼저 쓸 글 ${next.length}(이어짐 ${next.filter((x) => x.id).length}) · 월 검색수 ${vol.cards}장(검색어 ${items.filter((i) => i.kw).length}장) · 검색 철 ${seoDays.length}개 날·트렌드 ${trends.length}개 → 맞은 카드 ${items.filter((i) => i.seo).length}`);
+  console.log(`기준일 ${TODAY} · 서랍 ${items.length}개(${cnt}) · 깊숙이 ${deep.length} · 최근 글 ${recentPosts.length} · 블로그 ${blog.length}/인스타 ${insta.length} · 임시저장 ${td.drafts.length}(노트와 이어짐 ${draftByNote.size}) · 메일 글감 ${items.filter((i) => i.src === '메일').length} · 책장 글감 ${items.filter((i) => i.src === '책장').length} · 먼저 쓸 글 ${next.length}(이어짐 ${next.filter((x) => x.id).length}) · 월 검색수 ${vol.cards}장(검색어 ${items.filter((i) => i.kw).length}장) · 서치콘솔 ${gsc ? `${gsc.end} 기준 발행 카드 ${gsc.cards}장·손볼 글 ${gsc.tips.length}개·글감 카드 맞은 말 ${items.filter((i) => i.gscHit).length}장` : '캐시 없음'} · 검색 철 ${seoDays.length}개 날·트렌드 ${trends.length}개 → 맞은 카드 ${items.filter((i) => i.seo).length}`);
   console.log('→ ' + path.relative(process.cwd(), OUT));
 })().catch((e) => { console.error(e.message); process.exit(1); });

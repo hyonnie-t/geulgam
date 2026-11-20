@@ -107,16 +107,18 @@ function stamp(html) { $('#stamp').innerHTML = html; }
 function show(d, note) {
   data = {
     ...d,
-    items: arr(d.items).map((i) => ({ ...i, where: arr(i.where), picks: arr(i.picks), used: arr(i.used), pub: arr(i.pub), kw: arr(i.kw), vol: i.vol ? { ...i.vol, kws: arr(i.vol.kws) } : undefined })),
+    items: arr(d.items).map((i) => ({ ...i, where: arr(i.where), picks: arr(i.picks), used: arr(i.used), pub: arr(i.pub), kw: arr(i.kw), vol: i.vol ? { ...i.vol, kws: arr(i.vol.kws) } : undefined,
+      gsc: i.gsc ? { ...i.gsc, q: arr(i.gsc.q) } : undefined, gscHit: i.gscHit ? arr(i.gscHit) : undefined })),
     deep: arr(d.deep), recent: arr(d.recent), week: { ...(d.week || {}), ids: arr(d.week && d.week.ids) },
+    gsc: d.gsc ? { ...d.gsc, tips: arr(d.gsc.tips).map((t) => ({ ...t, q: arr(t.q) })) } : undefined,
   };
   $('#gate').hidden = true; $('#content').hidden = false;
   const at = new Date(d.at);
   const when = isNaN(at) ? '' : `${at.getMonth() + 1}월 ${at.getDate()}일 ${String(at.getHours()).padStart(2, '0')}:${String(at.getMinutes()).padStart(2, '0')}`;
   const st = d.stats || {};
-  stamp(`볼트 읽은 때 <b>${esc(when)}</b>${note ? ' · ' + esc(note) : ''} · 쓰인 노트 <b>${st.usedNotes ?? 0}</b>개 / 본문 있는 노트 ${st.withBody ?? '?'}개${d.volAt ? ` · 월 검색수 <b>${esc(fmtDay(d.volAt))}</b> 기준(네이버 검색광고 API)` : ''}`);
+  stamp(`볼트 읽은 때 <b>${esc(when)}</b>${note ? ' · ' + esc(note) : ''} · 쓰인 노트 <b>${st.usedNotes ?? 0}</b>개 / 본문 있는 노트 ${st.withBody ?? '?'}개${d.volAt ? ` · 월 검색수 <b>${esc(fmtDay(d.volAt))}</b> 기준(네이버 검색광고 API)` : ''}${data.gsc ? ` · 구글 <b>${esc(fmtDay(data.gsc.end))}</b>까지 90일(서치콘솔)` : ''}`);
   $('#vol-note').hidden = !data.items.some((i) => i.vol);
-  renderNext(); renderWeek(); renderFilters(); renderBoard(); renderDeep(); renderRecent();
+  renderNext(); renderGsc(); renderWeek(); renderFilters(); renderBoard(); renderDeep(); renderRecent();
 }
 
 // 먼저 쓸 글: build.js가 next로 넣음 — 볼트 «먼저 쓸 글» 노트 순서가 앞, 빈자리는 자동(auto), 발행된 줄은 맨 뒤(done)에 잠깐 남았다 빠짐(2026-11-15).
@@ -182,6 +184,7 @@ function card(it, n) {
   // 검색 철(build.js가 seo로 넣음): 해마다 검색이 몰리는 날이 가깝거나 오늘 많이 찾는 말이 제목에 있음
   if (it.seo && it.stage !== '발행') tags.unshift(`<span class="tag seo">🔎 ${it.seo.trend ? '지금 많이 찾음' : `${esc(it.seo.label)} D-${it.seo.left}`}</span>`);
   if (it.vol && it.stage !== '발행') tags.push(`<span class="tag vol${it.vol.g && it.vol.g.weak ? ' weak' : ''}" title="네이버 월 검색수(검색광고 API)와 검색 기대">📈 ${esc(volChip(it.vol))}</span>`);
+  if (it.gsc && it.stage === '발행') tags.push(`<span class="tag vol" title="구글 서치콘솔 90일">🔎 구글 클릭 ${fmtN(it.gsc.c)} · ${it.gsc.pos}위</span>`);
   if (it.next && it.stage !== '발행') tags.unshift(`<span class="tag nextup">👉 먼저 ${it.next}</span>`);
   if (it.draft && it.src !== '임시저장') tags.unshift('<span class="tag tdraft">✍️ 임시저장</span>');
   if (it.stage === '글감' && it.age >= OLD) tags.push(`<span class="tag old${it.age >= VERY_OLD ? ' very' : ''}">묵은 지 ${it.age}일</span>`);
@@ -219,6 +222,45 @@ function renderBoard() {
   reveal();
 }
 
+// 구글에서 손볼 글(2026-11-20): build.js가 서치콘솔 캐시로 고른 tips. 누르면 글이 열리고, 부탁할 말 복사로 Claude에게 고친본을 맡긴다.
+const GSC_KIND = {
+  ctr: { label: '👀 보이는데 덜 눌림', why: '구글 1쪽에 자주 보이는데 누르는 사람이 적어요. 사람들이 친 말이 제목에 없으면 그래요.' },
+  near: { label: '🪜 2쪽 문턱', why: '평균 순위가 8~20위라 1쪽 끝이나 2쪽에 걸려 있어요. 사람들이 친 말을 제목·본문에 넣고 조금 보강하면 1쪽으로 올라와요.' },
+  twin: { label: '🤼 같은 말로 다툼', why: '내 글 두 개가 같은 검색어에 같이 보여서 서로 순위를 나눠 가져요.' },
+};
+const pct = (x) => (x.i ? `${Math.round((x.c / x.i) * 1000) / 10}%` : '0%');
+const gscNums = (x) => `노출 ${fmtN(x.i)} · 클릭 ${fmtN(x.c)}(${pct(x)}) · 평균 ${x.pos}위`;
+function gscAsk(t) {
+  const q = t.q.map((s) => `«${s}»`).join(', ');
+  if (t.kind === 'twin') return `블로그 글 «${t.t}»와 «${t.with ? t.with.t : ''}»가 구글에서 ${q}로 서로 다퉈. 어느 쪽을 대표로 할지 보고 서로 잇는 고친본 만들어줘`;
+  if (t.kind === 'near') return `블로그 글 «${t.t}»(${t.u})가 구글 평균 ${t.pos}위야. ${q}로 1쪽에 오르게 제목·본문에 그 말 넣고 보강·관련 글 링크 고친본 만들어줘`;
+  return `블로그 글 «${t.t}»(${t.u})가 구글에서 ${q}로 보이는데 덜 눌려. 제목·첫 문장에 그 말을 넣은 고친본 만들어줘`;
+}
+function renderGsc() {
+  const g = data.gsc, list = g ? g.tips : [];
+  $('#gsc').hidden = !list.length;
+  if (!list.length) return;
+  $('#gsc-note').textContent = `${fmtDay(g.start)}~${fmtDay(g.end)}`;
+  $('#gsc-list').innerHTML = list.map((t) => {
+    const k = GSC_KIND[t.kind] || GSC_KIND.near;
+    return `<li class="gsc-card">
+      <span class="gsc-top"><span class="tag gsc-kind">${k.label}</span><a href="${esc(t.u)}" target="_blank" rel="noopener">${esc(t.t)}</a></span>
+      <span class="nums">${esc(gscNums(t))}</span>
+      <span class="why">${esc(k.why)}${t.with ? ` 함께 보이는 글: <a href="${esc(t.with.u)}" target="_blank" rel="noopener">${esc(t.with.t)}</a>` : ''}</span>
+      ${t.q.length ? `<span class="q">사람들이 친 말: ${t.q.map((s) => `<b>${esc(s)}</b>`).join(' · ')}</span>` : ''}
+      <button type="button" class="ghost small" data-copy="${esc(gscAsk(t))}"><lucian-copy state="idle" size="20" tone="line"></lucian-copy> 부탁할 말 복사</button>
+    </li>`;
+  }).join('');
+}
+// 상세 창 «구글 검색»: 발행 카드는 이 글의 노출·클릭·검색어, 글감·초안 카드는 검색어가 이미 구글에서 내 블로그로 들어온 말이면 알려 줌
+function gscSec(it) {
+  if (it.gsc) return `<p class="d-grade"><b>${esc(gscNums(it.gsc))}</b></p>
+    ${it.gsc.q.length ? `<div class="d-vol">${it.gsc.q.map((q) => `<div class="row"><span class="k">${esc(q.q)}</span><span class="n">노출 <b>${fmtN(q.i)}</b> · 클릭 <b>${fmtN(q.c)}</b> · <b>${q.pos}</b>위</span></div>`).join('')}</div>` : ''}
+    <p class="hint">구글 서치콘솔 ${data.gsc ? `${esc(fmtDay(data.gsc.start))}~${esc(fmtDay(data.gsc.end))}` : '90일'} 값이에요. 드물게 친 말은 구글이 숨겨서 검색어 합이 노출보다 적어요.</p>`;
+  if (it.gscHit && it.gscHit.length) return `<p>구글에서 이미 이 말로 내 블로그가 보였어요: ${it.gscHit.map((h) => `<b>${esc(h.q)}</b>(노출 ${fmtN(h.i)}, ${h.pos}위)`).join(' · ')}. 제목에 그대로 넣으면 좋아요.</p>`;
+  return '';
+}
+
 function renderDeep() {
   $('#deep-note').textContent = `${data.deep.length}개`;
   $('#deep-list').innerHTML = data.deep.map((d) => `<li><button type="button" class="deep-item" data-deep="${esc(d.id)}">
@@ -228,7 +270,7 @@ function renderRecent() {
   const list = data.recent;
   $('#recent-list').innerHTML = list.length ? list.map((r) => `<li><span class="d">${fmtDay(r.d)}</span>
     <a href="${esc(r.u)}" target="_blank" rel="noopener">${r.k === '인스타' ? '📷' : '📝'} ${esc(r.t || r.k + ' 글')}</a>
-    <span class="link-state">${r.linked ? '노트와 이어짐' : '노트 없이'}</span></li>`).join('') : '<li>45일 안에 나간 글이 없어요.</li>';
+    <span class="link-state">${r.linked ? '노트와 이어짐' : '노트 없이'}</span>${r.gsc ? `<span class="gsc-mini">🔎 구글 노출 ${fmtN(r.gsc.i)} · 클릭 ${fmtN(r.gsc.c)} · ${r.gsc.pos}위</span>` : ''}</li>`).join('') : '<li>45일 안에 나간 글이 없어요.</li>';
 }
 
 // 보이는 순간 한 장씩 떠오름
@@ -304,6 +346,7 @@ function openItem(id) {
     sec('왜 여기 있나', `<p>${esc(it.stageWhy || '')}${it.since ? ` · ${fmtDay(it.since)}부터` : ''}${it.seo && it.stage !== '발행' ? `<br>🔎 ${it.seo.trend ? `오늘 많이 찾는 말 «${esc(it.seo.term)}»` : `«${esc(it.seo.label)}» 검색이 느는 때 · ${fmtDay(it.seo.d)}까지 ${it.seo.left}일`}` : ''}${next ? `<br><span class="hint">다음: ${next}</span>` : ''}</p>`),
     sec('티스토리 임시저장', draftSec),
     sec('네이버 월 검색수', volSec(it)),
+    sec('구글 검색(서치콘솔)', gscSec(it)),
     sec('뽑힌 이유', it.picks.filter((p) => p.why).map((p) => `<p class="d-quote">${esc(p.why)}<br><span class="hint">${fmtDay(p.d)} 이번 주 글감</span></p>`).join('')),
     sec(it.file ? '노트 첫 줄' : '글 첫 줄', it.head ? `<p class="hint">${esc(it.head)}${it.len && it.file ? ` (본문 ${it.len}자)` : ''}</p>` : ''),
     sec('나간 글', it.stage === '발행' ? `<ul>${it.pub.map((p) => `<li>${fmtDay(p.d)} ${esc(p.k)} — <a href="${esc(p.u)}" target="_blank" rel="noopener">${esc(p.t || '열기')}</a></li>`).join('')}</ul>` : before),
