@@ -243,7 +243,13 @@ function reveal() {
 const obsidianUrl = (file) => `obsidian://open?vault=${encodeURIComponent(VAULT)}&file=${encodeURIComponent(file.replace(/\.md$/, ''))}`;
 function askFor(it) {
   const p = it.picks.find((x) => x.ask);
-  if (p) return p.ask;
+  // 일지 요청문은 «이 노트로 …»처럼 노트를 가리키기만 해서, 새 세션에 붙여 넣으면 어느 노트인지 모른다 → 노트 링크를 꼭 넣는다
+  if (p) {
+    if (!it.file || p.ask.includes(`[[${it.name}`)) return p.ask;
+    const link = `[[${it.name}]]`;
+    const swapped = p.ask.replace(/^(이|그)\s*노트(로|를|에|의|에서)?/, (_, __, j) => link + (j || ''));
+    return swapped !== p.ask ? swapped : `${link} — ${p.ask}`;
+  }
   if (it.draft) return `티스토리 임시저장 «${it.draft.title}» 발행 전 점검하자${it.file ? ` (노트 [[${it.name}]])` : ''}`;
   if (it.stage === '초안') return `[[${it.name}]] 초안 이어서 다듬자`;
   if (it.src === '책') return `[[${it.name}]]로 ${it.where.includes('인스타') ? '책 인스타 글' : '티스토리 서평'} 초안 같이 쓰자`;
