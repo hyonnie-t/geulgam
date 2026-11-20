@@ -128,6 +128,24 @@ main { max-width: 1200px; margin: 0 auto; padding: 0 var(--space-3) var(--space-
 .d-vol .n { font-size: 14px; color: var(--soft); }
 .d-vol .n b { color: var(--ink); font-weight: 600; }
 
+/* ---------- 구글에서 손볼 글 (서치콘솔, 2026-11-20) ---------- */
+.gsc { margin-bottom: var(--space-4); }
+.gsc-hint { color: var(--soft); font-size: 13px; margin: 0 0 var(--space-2); }
+.gsc-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); grid-template-columns: repeat(auto-fit, minmax(280px, 1fr)); }
+.gsc-card {
+  display: grid; gap: var(--space-1); align-content: start;
+  background: var(--paper); border: 1.5px solid var(--line); border-radius: var(--radius); padding: var(--space-3); box-shadow: var(--shadow);
+}
+.gsc-top { display: flex; flex-wrap: wrap; gap: var(--space-1) var(--space-2); align-items: baseline; }
+.gsc-top a { font-size: 16px; font-weight: 700; line-height: 1.35; color: var(--ink); text-decoration: none; }
+.gsc-top a:hover { text-decoration: underline; }
+.tag.gsc-kind { background: color-mix(in srgb, var(--pub) 35%, var(--paper)); font-weight: 600; }
+.gsc-card .nums { font-size: 14px; font-weight: 600; }
+.gsc-card .why, .gsc-card .q { font-size: 13px; color: var(--soft); line-height: 1.5; }
+.gsc-card .why a { color: inherit; }
+.gsc-card .q b { color: var(--ink); font-weight: 600; }
+.gsc-card .ghost { justify-self: start; margin-top: var(--space-1); }
+
 /* ---------- 이번 주 글감 ---------- */
 .week { margin-bottom: var(--space-4); }
 .week-list { list-style: none; margin: 0; padding: 0; display: grid; gap: var(--space-2); grid-template-columns: repeat(auto-fit, minmax(260px, 1fr)); }
@@ -239,6 +257,9 @@ main { max-width: 1200px; margin: 0 auto; padding: 0 var(--space-3) var(--space-
 .recent-list a { flex: 1; min-width: 0; text-decoration: none; color: var(--ink); }
 .recent-list a:hover { text-decoration: underline; }
 .recent-list .link-state { flex: none; font-size: 12px; color: var(--soft); }
+.recent-list li:has(.gsc-mini) { flex-wrap: wrap; }
+/* 구글 숫자는 제목 아래 따로 한 줄(폰에서 제목이 좁아지지 않게, 2026-11-20 검토 지적). 들여쓰기 = 날짜 칸(5.5em)+간격 */
+.recent-list .gsc-mini { flex-basis: 100%; padding-left: calc(5.5em * 13 / 15 + var(--space-2)); font-size: 12px; color: var(--soft); }
 
 /* ---------- 상세 창 (top layer, 바깥 누르면 닫힘) ---------- */
 dialog {
