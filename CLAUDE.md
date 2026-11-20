@@ -29,7 +29,7 @@
   - 출처: 폴더(4-독서·문화=책, 2-수업, 3-대학원, 0-수신함…), `쓸곳:` 속성으로 블로그/인스타를 바꿀 수 있다. 묵은 글감: 21일·42일.
 - `tools/upload.js [--dry]` 자료를 Firebase에 올린다(firebase-tools CLI, 효니 계정 로그인 필요). 2026-11-14 첫 실행(효니 «배포해줘»), 다시 받아 개수 대조 일치, 로그인 없는 REST 읽기는 Permission denied. 배포 https://hyonnie-t.github.io/geulgam/ (공개 레포, 자료 파일은 404).
 - `tools/serve.js` 내 PC 확인용(127.0.0.1:8801, launch 이름 `geulgam`). localhost에서는 `drawer.local.json`을 바로 읽는다. `?demo=1`은 가짜 자료 `demo/drawer.json`, `?fb=1`은 localhost에서도 로그인 경로.
-- `index.html` / `css/app.css` / `js/app.js`(화면) / `js/fb.js`(로그인·읽기, 책장 fb.js 방식) / `sw.js`(앱 파일만 캐시, 자료는 캐시 안 함) / `js/vendor/lucian-icons`(refresh 61번·copy 9번, MIT).
+- `index.html` / `css/app.css` / `js/app.js`(화면) / `js/fb.js`(로그인·읽기, 책장 fb.js 방식) / `sw.js`(앱 파일만 캐시, 자료는 캐시 안 함) / `js/vendor/lucian-icons`(refresh 61번·copy 9번, MIT) / `img/`(2026-11-20, 힉스필드 그림, 원본 `클로드작업\산출물\생성미디어\2026-11-20_힉스필드-털기\`: `geulgam-empty.webp` 빈 칸 `.col-empty` 그림(최대 96px, `sw.js` FILES v13), `geulgam-og.jpg` 공유 미리보기 og:image).
 
 ## 규칙
 - 자료 파일(`drawer.local.json`, `*.local.json`)은 gitignore. 노트 내용을 커밋·답변·로그에 옮기지 않는다. 확인할 때는 건수·칸만 출력한다.
