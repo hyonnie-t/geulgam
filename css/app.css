@@ -196,7 +196,11 @@ main { max-width: 1200px; margin: 0 auto; padding: 0 var(--space-3) var(--space-
   background: var(--stage-c); border-radius: 999px; font-size: 16px;
 }
 .col-head .count { font-size: 13px; opacity: .75; }
-.col-empty { color: var(--soft); font-size: 14px; border: 1.5px dashed var(--line); border-radius: var(--radius); padding: var(--space-3); background: color-mix(in srgb, var(--paper) 70%, transparent); }
+.col-empty { color: var(--soft); font-size: 14px; border: 1.5px dashed var(--line); border-radius: var(--radius); padding: var(--space-3); text-align: center; background: color-mix(in srgb, var(--paper) 70%, transparent); }
+.col-empty p { margin: 0; }
+/* 빈 칸 그림(빈 서랍): 작게 가운데, 글 위에. 세 칸이 다 비어도 같은 크기라 줄이 맞음 */
+.col-empty .empty-art { display: block; width: 100%; max-width: 96px; height: auto; margin: 0 auto var(--space-2); border-radius: var(--radius); }
+@media (prefers-color-scheme: dark) { .col-empty .empty-art { opacity: .85; } }
 
 /* 카드 */
 .card {

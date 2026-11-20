@@ -213,7 +213,7 @@ function renderBoard() {
     if (view.sort === '검색량') list = list.map((i, n) => ({ i, n, r: volRank(i) })).sort((a, b) => (b.r[0] - a.r[0]) || (b.r[1] - a.r[1]) || a.n - b.n).map((x) => x.i);
     return `<section class="col${view.stage === s.key ? ' on' : ''}" data-stage="${s.key}" aria-label="${s.label} 칸">
       <h3 class="col-head">${s.emoji} ${s.label} <span class="count">${list.length}</span></h3>
-      ${list.length ? `<ul class="col-list">${list.map(card).join('')}</ul>` : `<p class="col-empty">${esc(s.empty)}</p>`}
+      ${list.length ? `<ul class="col-list">${list.map(card).join('')}</ul>` : `<div class="col-empty"><img class="empty-art" src="img/geulgam-empty.webp" alt="" width="480" height="480" decoding="async"><p>${esc(s.empty)}</p></div>`}
     </section>`;
   }).join('');
   reveal();
